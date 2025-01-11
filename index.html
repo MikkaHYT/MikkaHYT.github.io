@@ -3,45 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Button Click Counter</title>
-    <script>
-        function setCookie(name, value, days) {
-            let expires = "";
-            if (days) {
-                const date = new Date();
-                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-                expires = "; expires=" + date.toUTCString();
-            }
-            document.cookie = name + "=" + (value || "") + expires + "; path=/";
+    <title>Mikka's Portfolio</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            color: white;
         }
-
-        function getCookie(name) {
-            const nameEQ = name + "=";
-            const ca = document.cookie.split(';');
-            for (let i = 0; i < ca.length; i++) {
-                let c = ca[i];
-                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-                if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
-            }
-            return null;
+        .section {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transition: transform 0.5s ease-in-out;
         }
-
-        function incrementCounter() {
-            let counter = getCookie("counter");
-            counter = counter ? parseInt(counter) + 1 : 1;
-            setCookie("counter", counter, 7);
-            document.getElementById("counter").innerText = counter;
+        #section1 {
+            background: linear-gradient(45deg, black, purple);
+            animation: gradient 5s infinite alternate;
         }
-
-        window.onload = function() {
-            let counter = getCookie("counter");
-            document.getElementById("counter").innerText = counter ? counter : 0;
+        #section2 {
+            background: linear-gradient(45deg, purple, black);
+            animation: gradient 5s infinite alternate-reverse;
         }
-    </script>
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+        .content {
+            max-width: 600px;
+        }
+        .languages {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
 </head>
 <body>
-    <h1>Button Click Counter</h1>
-    <p>Button clicked <span id="counter">0</span> times.</p>
-    <button onclick="incrementCounter()">Click me!</button>
+    <div id="section1" class="section">
+        <div class="content">
+            <h1>Mikka</h1>
+            <p>I code things.</p>
+        </div>
+    </div>
+    <div id="section2" class="section">
+        <div class="content languages">
+            <h2>Languages I Code In</h2>
+            <p>JavaScript</p>
+            <p>Python</p>
+            <p>HTML</p>
+            <p>CSS</p>
+            <p>C#</p>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('wheel', function(event) {
+            if (event.deltaY > 0) {
+                document.body.scrollTop += window.innerHeight;
+                document.documentElement.scrollTop += window.innerHeight;
+            } else {
+                document.body.scrollTop -= window.innerHeight;
+                document.documentElement.scrollTop -= window.innerHeight;
+            }
+        });
+    </script>
 </body>
 </html>
