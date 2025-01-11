@@ -10,7 +10,6 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden;
             font-family: Arial, sans-serif;
             color: white;
         }
@@ -27,10 +26,7 @@
             background: linear-gradient(45deg, black, purple);
             animation: gradient 5s infinite alternate;
         }
-        #section2 {
-            background: linear-gradient(45deg, purple, black);
-            animation: gradient 5s infinite alternate-reverse;
-        }
+        
         @keyframes gradient {
             0% { background-position: 0% 50%; }
             100% { background-position: 100% 50%; }
@@ -50,50 +46,18 @@
         <div class="content">
             <h1>Mikka</h1>
             <p>I code things.</p>
-        </div>
-    </div>
-    <div id="section2" class="section">
-        <div class="content languages">
+            <br>
             <h2>Languages I Code In</h2>
             <p>JavaScript</p>
             <p>Python</p>
             <p>HTML</p>
             <p>CSS</p>
             <p>C#</p>
+            <br>
+            <br>
+            <h1>Projects</h1>
+            <a href="/games.html">Games</a>
         </div>
     </div>
-    <script>
-        function smoothScroll(target, duration) {
-            var targetPosition = target.getBoundingClientRect().top + window.pageYOffset;
-            var startPosition = window.pageYOffset;
-            var distance = targetPosition - startPosition;
-            var startTime = null;
-
-            function animation(currentTime) {
-                if (startTime === null) startTime = currentTime;
-                var timeElapsed = currentTime - startTime;
-                var run = ease(timeElapsed, startPosition, distance, duration);
-                window.scrollTo(0, run);
-                if (timeElapsed < duration) requestAnimationFrame(animation);
-            }
-
-            function ease(t, b, c, d) {
-                t /= d / 2;
-                if (t < 1) return c / 2 * t * t + b;
-                t--;
-                return -c / 2 * (t * (t - 2) - 1) + b;
-            }
-
-            requestAnimationFrame(animation);
-        }
-
-        document.addEventListener('wheel', function(event) {
-            if (event.deltaY > 0) {
-                smoothScroll(document.getElementById('section2'), 1000);
-            } else {
-                smoothScroll(document.getElementById('section1'), 1000);
-            }
-        });
-    </script>
-</body>
+    </body>
 </html>
