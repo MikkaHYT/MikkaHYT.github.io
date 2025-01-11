@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Click Counter</title>
+    <script>
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "") + expires + "; path=/";
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+
+        function incrementCounter() {
+            let counter = getCookie("counter");
+            counter = counter ? parseInt(counter) + 1 : 1;
+            setCookie("counter", counter, 7);
+            document.getElementById("counter").innerText = counter;
+        }
+
+        window.onload = function() {
+            let counter = getCookie("counter");
+            document.getElementById("counter").innerText = counter ? counter : 0;
+        }
+    </script>
+</head>
+<body>
+    <h1>Button Click Counter</h1>
+    <p>Button clicked <span id="counter">0</span> times.</p>
+    <button onclick="incrementCounter()">Click me!</button>
+</body>
+</html>
