@@ -63,35 +63,25 @@
         </div>
     </div>
     <script>
-        document.addEventListener('wheel', function(event) {
-            if (event.deltaY > 0) {
-                document.body.scrollTop += window.innerHeight;
-                document.documentElement.scrollTop += window.innerHeight;
-            } else {
-                document.body.scrollTop -= window.innerHeight;
-                document.documentElement.scrollTop -= window.innerHeight;
-            }
-        });
-
         function smoothScroll(target, duration) {
-            var targetPosition = target.getBoundingClientRect().top;
+            var targetPosition = target.getBoundingClientRect().top + window.pageYOffset;
             var startPosition = window.pageYOffset;
-            var distance = targetPosition;
+            var distance = targetPosition - startPosition;
             var startTime = null;
 
             function animation(currentTime) {
-            if (startTime === null) startTime = currentTime;
-            var timeElapsed = currentTime - startTime;
-            var run = ease(timeElapsed, startPosition, distance, duration);
-            window.scrollTo(0, run);
-            if (timeElapsed < duration) requestAnimationFrame(animation);
+                if (startTime === null) startTime = currentTime;
+                var timeElapsed = currentTime - startTime;
+                var run = ease(timeElapsed, startPosition, distance, duration);
+                window.scrollTo(0, run);
+                if (timeElapsed < duration) requestAnimationFrame(animation);
             }
 
             function ease(t, b, c, d) {
-            t /= d / 2;
-            if (t < 1) return c / 2 * t * t + b;
-            t--;
-            return -c / 2 * (t * (t - 2) - 1) + b;
+                t /= d / 2;
+                if (t < 1) return c / 2 * t * t + b;
+                t--;
+                return -c / 2 * (t * (t - 2) - 1) + b;
             }
 
             requestAnimationFrame(animation);
@@ -99,9 +89,9 @@
 
         document.addEventListener('wheel', function(event) {
             if (event.deltaY > 0) {
-            smoothScroll(document.getElementById('section2'), 1000);
+                smoothScroll(document.getElementById('section2'), 1000);
             } else {
-            smoothScroll(document.getElementById('section1'), 1000);
+                smoothScroll(document.getElementById('section1'), 1000);
             }
         });
     </script>
