@@ -211,15 +211,16 @@
         });
 
         function playSong(index) {
-            const selectedFile = mp3Files[index];
-            player.src = mp3Folder + selectedFile;
-            player.play();
-            isPlaying = true;
-            playPauseButton.textContent = 'Pause';
-            currentSongDisplay.textContent = selectedFile;
-            document.querySelectorAll('#playlist li').forEach(li => li.classList.remove('active'));
-            document.querySelector(`#playlist li[data-index="${index}"]`).classList.add('active');
-        }
+    const selectedFile = mp3Files[index];
+    player.src = mp3Folder + selectedFile;
+    player.play();
+    isPlaying = true;
+    playPauseButton.textContent = 'Pause';
+    currentSongDisplay.textContent = selectedFile;
+    document.querySelectorAll('#playlist li').forEach(li => li.classList.remove('active'));
+    document.querySelector(`#playlist li[data-index="${index}"]`).classList.add('active');
+    document.title = selectedFile; // Update the page title
+}
 
         // Play the first song by default
         // playSong(0);
