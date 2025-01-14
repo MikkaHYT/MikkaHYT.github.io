@@ -4,11 +4,47 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game Links</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        .section {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transition: transform 0.5s ease-in-out;
+        }
+        #section1 {
+            background: linear-gradient(45deg, black, purple);
+            animation: gradient 5s infinite alternate;
+        }
+        
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+        .content {
+            max-width: 600px;
+        }
+        .languages {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
 </head>
 <body>
     <h1>Game Links</h1>
     <ul>
-        <li><a href="/EaglercraftX_1.8.html">Minecraft 1.8</a></li>
+        <li><a href="/EaglercraftX_1.8.html">Minecraft (1.8)</a></li>
         <li><a href="/#">Placeholder Game 1</a></li>
         <li><a href="/#">Placeholder Game 2</a></li>
         <li><a href="/#">Placeholder Game 3</a></li>
