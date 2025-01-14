@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music List</title>
+    <style>
+        body {
+            display: flex;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f3f3;
+            margin: 0;
+            height: 100vh;
+        }
+        #playlist-container {
+            width: 30%;
+            padding: 10px;
+            border-right: 1px solid #ccc;
+            overflow-y: auto;
+            background-color: #fff;
+        }
+        #playlist {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #playlist li {
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+            transition: background 0.3s;
+        }
+        #playlist li:hover {
+            background: #e0e0e0;
+        }
+        #playlist li.active {
+            background: #d0d0d0;
+        }
+        #player-container {
+            flex-grow: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #f3f3f3;
+        }
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .player-controls button {
+            background: #0078d4;
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .player-controls button:hover {
+            background: #005a9e;
+        }
+        .seek-bar .volume-slider {
+            width: 1300px;
+        }
+        
+        .volume-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .player-info {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="playlist-container">
+        <ul id="playlist"></ul>
+    </div>
+    <div id="player-container">
+        <div class="player-info">
+            <div id="current-song">Select a song to play</div>
+        </div>
+        <div class="player-controls">
+            <button id="prev">Prev</button>
+            <button id="play-pause">Play</button>
+            <button id="next">Next</button>
+        </div>
+        <input type="range" id="seek-bar" value="0">
+        <div class="volume-controls">
+            <button id="mute"><img src="unmute-icon.png" alt="Mute" width="20"></button>
+            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1">
+        </div>
+    </div>
+
+    <script>
+        const player = new Audio();
+        const playlist = document.getElementById('playlist');
+        const mp3Folder = 'mp3s/';
+        const playPauseButton = document.getElementById('play-pause');
+        const prevButton = document.getElementById('prev');
+        const nextButton = document.getElementById('next');
+        const seekBar = document.getElementById('seek-bar');
+        const volumeSlider = document.getElementById('volume-slider');
+        const muteButton = document.getElementById('mute');
+        const currentSongDisplay = document.getElementById('current-song');
+
+        let currentIndex = 0;
+        let isPlaying = false;
+        let isMuted = false;
+
+        const mp3Files = [
+            'X-Mas List (Christmas List) (JW3).mp3',
+            'Blood On My Jeans (On The Run) (V1) (JW3).mp3',
+            'Cheese & Dope Freestyle (JW3).mp3',
+            'Hate Me (with Juice WRLD) (V1) (JW3).mp3',
+            'Let Me Be (Lone Ranger) (JW3).mp3',
+            'Meant Forever (Keep It) (JW3).mp3',
+            'Zoom (JW3).mp3',
+            'Alright (Buried Alive) (WOD).mp3',
+            'Another Place (In The Summer) (Gave Her All Of Me Pt.2) (DRFL).mp3',
+            'Attachments (DRFL).mp3',
+            'Bye Bye Baby (feat. Juice WRLD) (WOD).mp3',
+            'Cake (Sacrifices) (Off This Earth) (Purge) (WOD).mp3',
+            'Contained (Leave Me Dead) (Change) (DRFL).mp3',
+            'Devil Horns (V2) (GB&GR).mp3',
+            'Hand On My Chest (Tears) (GB&GR).mp3',
+            'In My Head (with The Chainsmokers) (GB&GR).mp3',
+            'Lean Wit It (Horrible) (WOD).mp3',
+            'Left 4 Dead (Zombie Shit) (Bean On My .9) (GB&GR).mp3',
+            'Like Shit (Pump) (Fight) (V2) (GB&GR).mp3',
+            'Love You Always (Starfire) (Being In Love) (WOD).mp3',
+            'Melody (Irrelevant) (GB&GR).mp3',
+            'Obsessed (Cerebral) (GB&GR).mp3',
+            'Psychedelic (Feeling Myself) (GB&GR).mp3',
+            'Rental (Cha-Ching) (K) (DRFL).mp3',
+            'Rockstar Status (V2) (WOD).mp3',
+            'Sugarfish (with The Chainsmokers) (WOD).mp3',
+            'Your Loss (Girlfriend) (Try Again) (GB&GR).mp3',
+            'Zombie (Out Late) (WOD).mp3',
+            'Dont Play (Pressure Me) (GB&GR).mp3',
+            'Slide (feat. Juice WRLD) - Remix (DRFL).mp3'
+        ];
+
+        mp3Files.forEach((file, index) => {
+            const li = document.createElement('li');
+            li.textContent = file;
+            li.dataset.index = index;
+            playlist.appendChild(li);
+        });
+
+        playlist.addEventListener('click', (e) => {
+            if (e.target && e.target.nodeName === 'LI') {
+                currentIndex = parseInt(e.target.dataset.index);
+                playSong(currentIndex);
+            }
+        });
+
+        playPauseButton.addEventListener('click', () => {
+            if (isPlaying) {
+                player.pause();
+                playPauseButton.textContent = 'Play';
+            } else {
+                player.play();
+                playPauseButton.textContent = 'Pause';
+            }
+            isPlaying = !isPlaying;
+        });
+
+        prevButton.addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + mp3Files.length) % mp3Files.length;
+            playSong(currentIndex);
+        });
+
+        nextButton.addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % mp3Files.length;
+            playSong(currentIndex);
+        });
+
+        player.addEventListener('timeupdate', () => {
+            seekBar.value = (player.currentTime / player.duration) * 100;
+        });
+
+        seekBar.addEventListener('input', () => {
+            player.currentTime = (seekBar.value / 100) * player.duration;
+        });
+
+        volumeSlider.addEventListener('input', () => {
+            player.volume = volumeSlider.value;
+        });
+
+        muteButton.addEventListener('click', () => {
+            if (isMuted) {
+                player.volume = volumeSlider.value;
+                muteButton.innerHTML = '<img src="unmute-icon.png" alt="Mute" width="20">';
+            } else {
+                player.volume = 0;
+                muteButton.innerHTML = '<img src="mute-icon.png" alt="Unmute" width="20">';
+            }
+            isMuted = !isMuted;
+        });
+
+        player.addEventListener('ended', () => {
+            currentIndex = (currentIndex + 1) % mp3Files.length;
+            playSong(currentIndex);
+        });
+
+        function playSong(index) {
+            const selectedFile = mp3Files[index];
+            player.src = mp3Folder + selectedFile;
+            player.play();
+            isPlaying = true;
+            playPauseButton.textContent = 'Pause';
+            currentSongDisplay.textContent = selectedFile;
+            document.querySelectorAll('#playlist li').forEach(li => li.classList.remove('active'));
+            document.querySelector(`#playlist li[data-index="${index}"]`).classList.add('active');
+        }
+
+        // Play the first song by default
+        playSong(0);
+    </script>
+</body>
+</html>
