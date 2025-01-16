@@ -21,15 +21,30 @@
     </style>
 </head>
 <body>
-    <canvas id="whiteboard" width="800" height="600"></canvas>
+    <canvas id="whiteboard" width="1600" height="1200"></canvas>
     <script>
         const canvas = document.getElementById('whiteboard');
         const ctx = canvas.getContext('2d');
         let drawing = false;
+        //const socket = new WebSocket('wss://simple-websocket-server-pni6.onrender.com/');
+        const socket = new WebSocket('wss://simple-websocket-server-pni6.onrender.com:8000');
+        
+        socket.addEventListener('open', () => {
+            console.log('Connected to WebSocket server');
+        });
 
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mousemove', draw);
+
+        socket.addEventListener('message', event => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'draw') {
+                drawFromServer(data);
+            } else if (data.type === 'clear') {
+                clearCanvas();
+            }
+        });
 
         function startDrawing(e) {
             drawing = true;
@@ -44,15 +59,50 @@
         function draw(e) {
             if (!drawing) return;
 
+            const posX = e.clientX - canvas.offsetLeft;
+            const posY = e.clientY - canvas.offsetTop;
+
             ctx.lineWidth = 5;
             ctx.lineCap = 'round';
             ctx.strokeStyle = '#000';
 
-            ctx.lineTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+            ctx.lineTo(posX, posY);
             ctx.stroke();
             ctx.beginPath();
-            ctx.moveTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+            ctx.moveTo(posX, posY);
+
+            socket.send(JSON.stringify({ type: 'draw', posX, posY }));
         }
+
+        function drawFromServer(data) {
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#000';
+
+            ctx.lineTo(data.posX, data.posY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(data.posX, data.posY);
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        window.addEventListener('beforeunload', () => {
+            localStorage.setItem('whiteboardState', canvas.toDataURL());
+        });
+
+        window.addEventListener('load', () => {
+            const dataURL = localStorage.getItem('whiteboardState');
+            if (dataURL) {
+                const img = new Image();
+                img.src = dataURL;
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0);
+                };
+            }
+        });
     </script>
 </body>
 </html>
