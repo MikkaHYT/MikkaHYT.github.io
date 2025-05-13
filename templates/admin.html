@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Chat Server</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        /* Styles remain the same as before */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; color: #333; }
+        header { background-color: #007BFF; color: white; padding: 10px 20px; text-align: center; }
+        main { padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        table th, table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        table th { background-color: #007BFF; color: white; }
+        table tr:nth-child(even) { background-color: #f9f9f9; }
+        table tr:hover { background-color: #f1f1f1; }
+        .action-buttons button { margin-right: 5px; padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .edit-button { background-color: #ffc107; color: white; }
+        .edit-button:hover { background-color: #e0a800; }
+        .delete-button { background-color: #ff4d4d; color: white; }
+        .delete-button:hover { background-color: #e60000; }
+        .refresh-button { background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .refresh-button:hover { background-color: #218838; }
+        .erase-button { background-color: #f73838; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .erase-button:hover { background-color: #9e0101; }
+        #refresh-clients-button { background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        #refresh-clients-button:hover { background-color: #218838; }
+        #message-form { display: flex; padding: 10px; background-color: #1f1f1f; border-top: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Admin Panel - Chat Server</h1>
+    </header>
+    <main>
+        <button class="refresh-button" id="refresh-messages">Refresh Messages</button>
+        <button id="refresh-clients-button" >Refresh All Clients</button>
+        <button class="erase-button" id="erase-chat">Erase Chat</button>
+
+        <script>
+            const refreshClientsButton = document.getElementById('refresh-clients-button');
+
+            // Emit an event to refresh all clients when the button is clicked
+            refreshClientsButton.addEventListener('click', () => {
+                socket.emit('refresh_clients');
+                alert('Refresh signal sent to all clients.');
+            });
+        </script>
+        <h2>Messages</h2>
+        <table id="messages-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Message</th>
+                    <th>Image</th>
+                    <th>Reactions</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Messages will be dynamically loaded here -->
+            </tbody>
+        </table>
+    </main>
+
+    <script>
+        const socket = io();
+
+        const messagesTableBody = document.getElementById('messages-table').querySelector('tbody');
+        const refreshButton = document.getElementById('refresh-messages');
+        const eraseButton = document.getElementById('erase-chat');
+        
+
+        // Fetch all messages from the server
+        function fetchMessages() {
+            socket.emit('admin_fetch_messages');
+        }
+
+        // Handle messages received from the server
+        socket.on('admin_messages', (messages) => {
+            messagesTableBody.innerHTML = ''; // Clear the table
+            messages.forEach(message => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${message.id}</td>
+                    <td>${message.username}</td>
+                    <td>${message.message}</td>
+                    <td>${message.image ? `<img src="${message.image}" alt="Image" style="width: 50px; height: auto;">` : 'No Image'}</td>
+                    <td>${message.reactions || 'No Reactions'}</td>
+                    <td class="action-buttons">
+                        <button class="edit-button" data-id="${message.id}" data-message="${message.message}">Edit</button>
+                        <button class="delete-button" data-id="${message.id}">Delete</button>
+                    </td>
+                `;
+                messagesTableBody.appendChild(row);
+            });
+        });
+
+        // Erase all messages
+        eraseButton.addEventListener('click', () => {
+            if (confirm('Are you sure you want to erase all messages?')) {
+                socket.emit('admin_erase_chat');
+            }
+        });
+
+        // Handle chat erased confirmation
+        socket.on('admin_chat_erased', () => {
+            alert('Chat erased successfully!');
+            fetchMessages();
+        });
+
+        // Handle edit button click
+        messagesTableBody.addEventListener('click', (e) => {
+            if (e.target.classList.contains('edit-button')) {
+                const messageId = e.target.dataset.id;
+                const currentMessage = e.target.dataset.message;
+                const newMessage = prompt('Edit the message:', currentMessage);
+                if (newMessage !== null) {
+                    socket.emit('admin_edit_message', { id: messageId, message: newMessage });
+                }
+            }
+        });
+
+        // Handle delete button click
+        messagesTableBody.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-button')) {
+                const messageId = e.target.dataset.id;
+                if (confirm('Are you sure you want to delete this message?')) {
+                    socket.emit('admin_delete_message', { id: messageId });
+                }
+            }
+        });
+
+        // Handle message update confirmation
+        socket.on('admin_message_updated', () => {
+            alert('Message updated successfully!');
+            fetchMessages();
+        });
+
+        // Handle message deletion confirmation
+        socket.on('admin_message_deleted', () => {
+            alert('Message deleted successfully!');
+            fetchMessages();
+        });
+
+        // Send a broadcast message to all clients
+        function sendBroadcastAlert(message) {
+            console.log("sending broadcast to server")
+            socket.emit('admin_broadcast', { alert: message });
+        }
+
+        // Handle broadcast button click
+        const broadcastButton = document.createElement('button');
+        broadcastButton.textContent = 'Send Broadcast Alert';
+        broadcastButton.className = 'refresh-button';
+        broadcastButton.addEventListener('click', () => {
+            const alertMessage = prompt('Enter the broadcast message:');
+            console.log("emitting broadcast")
+            socket.emit('admin_broadcast', { alert: alertMessage });
+        });
+
+        // Add the broadcast button to the main section
+        document.querySelector('main').prepend(broadcastButton);
+
+        // Handle broadcast alert on the client side
+        socket.on('broadcast_alert', (data) => {
+            alert(data.alert);
+        });
+
+        // Refresh messages on button click
+        refreshButton.addEventListener('click', fetchMessages);
+
+        // Fetch messages on page load
+        window.addEventListener('DOMContentLoaded', fetchMessages);
+    </script>
+</body>
+</html>

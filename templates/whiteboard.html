@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whiteboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #202020;
+        }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            background-color: #4b4b4b;
+            padding: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .toolbar button, .toolbar select {
+            padding: 8px 12px;
+            margin: 0 5px;
+            border: 1px solid #000000;
+            border-radius: 4px;
+            background-color: #979797;
+            cursor: pointer;
+        }
+        .toolbar button:hover, .toolbar select:hover {
+            background-color: #6e6e6e;
+        }
+        canvas {
+            border: 1px solid #000;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button id="pen">Pen</button>
+        <button id="rectangle">Rectangle</button>
+        <button id="circle">Circle</button>
+        <select id="color">
+            <option value="black">Black</option>
+            <option value="red">Red</option>
+            <option value="blue">Blue</option>
+            <option value="green">Green</option>
+        </select>
+        <select id="pen-size">
+            <option value="1">1px</option>
+            <option value="3">3px</option>
+            <option value="5">5px</option>
+            <option value="10">10px</option>
+            <option value="20">20px</option>
+        </select>
+    </div>
+    <div style="position: relative;">
+        <canvas id="whiteboard" width="1200" height="800" style="position: absolute; z-index: 1; left: -600px;"></canvas>
+        <canvas id="cursor-layer" width="1200" height="800" style="position: absolute; z-index: 2; pointer-events: none; left: -600px;"></canvas>
+    </div>
+    
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('whiteboard');
+        const ctx = canvas.getContext('2d');
+        const cursorCanvas = document.getElementById('cursor-layer');
+        const cursorCtx = cursorCanvas.getContext('2d');
+        const activeCursors = {};
+        let drawing = false;
+        let currentTool = 'pen';
+        let startX, startY;
+        let color = 'black';
+        let penSize = 1; // Default pen size
+
+        // Update pen size when the user selects a new size
+        document.getElementById('pen-size').addEventListener('change', (e) => {
+            penSize = parseInt(e.target.value, 10);
+            // Save the current pen size to localStorage
+            localStorage.setItem('penSize', penSize);
+        });
+
+        // Set pen size to the value stored in localStorage on page load
+        window.addEventListener('load', () => {
+            const savedPenSize = localStorage.getItem('penSize');
+            if (savedPenSize) {
+                penSize = parseInt(savedPenSize, 10);
+                document.getElementById('pen-size').value = savedPenSize;
+            }
+        });
+
+        // Toolbar actions
+        document.getElementById('pen').addEventListener('click', () => currentTool = 'pen');
+        document.getElementById('rectangle').addEventListener('click', () => currentTool = 'rectangle');
+        document.getElementById('circle').addEventListener('click', () => currentTool = 'circle');
+        document.getElementById('color').addEventListener('change', (e) => color = e.target.value);
+        document.getElementById('pen-size').addEventListener('change', (e) => penSize = parseInt(e.target.value));
+
+        // Load whiteboard data on page load
+        socket.emit('load_whiteboard');
+
+        // Drawing logic
+        canvas.addEventListener('mousedown', (e) => {
+            drawing = true;
+            startX = e.offsetX;
+            startY = e.offsetY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (drawing && currentTool === 'pen') {
+                const x = e.offsetX;
+                const y = e.offsetY;
+                drawLine(startX, startY, x, y, color, penSize);
+                socket.emit('whiteboard_draw', { tool: 'pen', startX, startY, x, y, color, penSize });
+                startX = x;
+                startY = y;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            drawing = false;
+        });
+
+        // Track the user's cursor position
+        canvas.addEventListener('mousemove', (e) => {
+            const position = { x: e.offsetX, y: e.offsetY };
+            socket.emit('cursor_position', { id: socket.id, position });
+        });
+
+        // Render cursors on the cursor canvas
+        function renderCursors() {
+            // Clear the cursor canvas
+            cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+
+            // Redraw all active cursors
+            Object.keys(activeCursors).forEach((id) => {
+                const cursor = activeCursors[id];
+                if (cursor) {
+                    cursorCtx.beginPath();
+                    cursorCtx.arc(cursor.x, cursor.y, 5, 0, Math.PI * 2); // Draw a small circle for the cursor
+                    cursorCtx.fillStyle = 'red'; // Cursor color
+                    cursorCtx.fill();
+                }
+            });
+
+            // Request the next animation frame
+            requestAnimationFrame(renderCursors);
+        }
+
+        // Start rendering cursors
+        renderCursors();
+
+        // Handle cursor updates from the server
+        socket.on('cursor_update', (data) => {
+            const { id, position } = data;
+            activeCursors[id] = position; // Update the cursor position
+        });
+
+        // Handle cursor disconnection
+        socket.on('cursor_disconnect', (data) => {
+            const { id } = data;
+            delete activeCursors[id]; // Remove the cursor from the active list
+        });
+
+        // Undo functionality
+        let history = [];
+
+        canvas.addEventListener('mousedown', () => {
+            // Save the current canvas state before starting a new drawing
+            history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'z') {
+                if (history.length > 0) {
+                    const previousState = history.pop();
+                    ctx.putImageData(previousState, 0, 0);
+                    socket.emit('undo_whiteboard');
+                    socket.emit('save_whiteboard');
+                }
+            }
+        });
+
+        // Handle undo from other clients
+        socket.on('undo_whiteboard', () => {
+            if (history.length > 0) {
+                const previousState = history.pop();
+                ctx.putImageData(previousState, 0, 0);
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (drawing) {
+                const x = e.offsetX;
+                const y = e.offsetY;
+                if (currentTool === 'rectangle') {
+                    drawRectangle(startX, startY, x - startX, y - startY, color);
+                    socket.emit('whiteboard_draw', { tool: 'rectangle', startX, startY, width: x - startX, height: y - startY, color });
+                } else if (currentTool === 'circle') {
+                    const radius = Math.sqrt(Math.pow(x - startX, 2) + Math.pow(y - startY, 2));
+                    drawCircle(startX, startY, radius, color);
+                    socket.emit('whiteboard_draw', { tool: 'circle', startX, startY, radius, color });
+                }
+                // Save the whiteboard automatically
+                socket.emit('save_whiteboard');
+            }
+            drawing = false;
+        });
+
+        // Drawing functions
+        function drawLine(x1, y1, x2, y2, color, penSize = 1) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = penSize;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        function drawRectangle(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+        }
+
+        function drawCircle(x, y, radius, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Socket.IO events
+        socket.on('whiteboard_update', (data) => {
+            if (data.tool === 'pen') {
+                drawLine(data.startX, data.startY, data.x, data.y, data.color, data.penSize || 1); // Use the server-sent penSize
+            } else if (data.tool === 'rectangle') {
+                drawRectangle(data.startX, data.startY, data.width, data.height, data.color);
+            } else if (data.tool === 'circle') {
+                drawCircle(data.startX, data.startY, data.radius, data.color);
+            }
+        });
+
+        socket.on('whiteboard_data', (data) => {
+            data.forEach((item) => {
+                if (item.tool === 'pen') {
+                    drawLine(item.startX, item.startY, item.x, item.y, item.color, item.penSize || 1); // Use the server-sent penSize
+                } else if (item.tool === 'rectangle') {
+                    drawRectangle(item.startX, item.startY, item.width, item.height, item.color);
+                } else if (item.tool === 'circle') {
+                    drawCircle(item.startX, item.startY, item.radius, item.color);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
