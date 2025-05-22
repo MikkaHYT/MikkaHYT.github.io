@@ -24,7 +24,7 @@ def games():
     
 @app.route('/imagegen')
 def imagegen():
-return render_template('imagegen.html') 
+    return render_template('imagegen.html') 
 
 ###################
 ### Chat Server ###
