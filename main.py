@@ -27,7 +27,7 @@ def imagegen():
     return render_template('imagegen.html') 
     
 @app.route('/artistsleak')
-def imagegen():
+def artistsleak():
     return render_template('artistsleak.html') 
 
 ###################
