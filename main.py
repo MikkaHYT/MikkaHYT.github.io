@@ -25,6 +25,10 @@ def games():
 @app.route('/imagegen')
 def imagegen():
     return render_template('imagegen.html') 
+    
+@app.route('/artistsleak')
+def imagegen():
+    return render_template('artistsleak.html') 
 
 ###################
 ### Chat Server ###
