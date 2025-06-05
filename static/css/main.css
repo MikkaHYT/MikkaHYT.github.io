@@ -29,12 +29,54 @@
   }
  /* filepath: c:\Users\april\OneDrive\Documents\mikka\MikkaHYT.github.io\static\css\main.css */
 /* Navbar styling */
+
+:root {
+    --bg-color: #fff;
+    --text-color: #222;
+    --card-bg: #f5f5f5;
+    --navbar-bg: #fff;
+    --footer-bg: #eee;
+    --hero-bg: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+    --navbar-bg: #fff;
+    --section-bg: #fff;
+    --card-bg: #f5f5f5;
+}
+
+[data-theme="dark"] {
+    --bg-color: #181818;
+    --text-color: #f5f5f5;
+    --card-bg: #232323;
+    --navbar-bg: #232323;
+    --footer-bg: #181818;
+    --hero-bg: linear-gradient(135deg, #232323 0%, #181818 100%);
+    --navbar-bg: #232323;
+    --section-bg: #181818;
+    --card-bg: #232323;
+}
+
+body {
+    background: var(--bg-color);
+    color: var(--text-color);
+}
+
+.navbar, .skills-section, .projects-section, .footer, footer {
+    background: var(--navbar-bg);
+}
+
+.skill-card, .project-card {
+    background: var(--card-bg);
+}
+
+footer {
+    background: var(--footer-bg);
+    color: var(--text-color);
+}
+
 .navbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 15px 30px;
-    background-color: white;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
@@ -202,7 +244,7 @@
   .hero-section {
     text-align: center;
     padding: 120px 0;
-    background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+    background: var(--hero-bg);
   }
   
   .title {
@@ -241,7 +283,6 @@
   }
   
   .skill-card {
-    background-color: white;
     padding: 30px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
@@ -282,7 +323,6 @@
   }
   
   .project-card {
-    background-color: white;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
     overflow: hidden;
@@ -355,7 +395,6 @@
   
   /* Footer */
   footer {
-    background-color: white;
     padding: 30px 0;
     box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.05);
     text-align: center;
