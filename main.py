@@ -30,6 +30,10 @@ def imagegen():
 def artistsleak():
     return render_template('artistsleak.html') 
 
+@app.route('/tv')
+def tv():
+    return render_template('tv.html')
+
 ###################
 ### Chat Server ###
 ###################

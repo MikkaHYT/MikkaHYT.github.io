@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>TV Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="dashboard">
+        <!-- Background Slideshow -->
+        <div id="slideshow-container">
+            <div id="slideshow"></div>
+            <div class="slideshow-overlay"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content-overlay">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div id="clock">
+                    <div id="time">12:00</div>
+                    <div id="date">Monday, January 1</div>
+                </div>
+                
+                <div id="weather">
+                    <div id="weather-icon">☀️</div>
+                    <div id="temperature">22°C</div>
+                    <div id="weather-desc">Sunny</div>
+                    <div id="location">Your City</div>
+                </div>
+            </div>
+
+            <!-- Spotify Section -->
+            <div class="spotify-section">
+                <div id="spotify-container">
+                    <div class="spotify-loading">
+                        <div class="spotify-loading-text">🎵 Loading Spotify...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <button id="upload-btn" class="nav-button">
+                    📁 Upload Photos
+                </button>
+                <button id="spotify-quick-control" class="nav-button">
+                    🎵 Music
+                </button>
+                <button id="slideshow-toggle" class="nav-button">
+                    ⏸️ Pause Slideshow
+                </button>
+                <button id="settings-btn" class="nav-button">
+                    ⚙️ Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- Upload Modal -->
+        <div id="upload-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>📸 Upload Photos</h2>
+                
+                
+
+                <!-- Phone Upload Section -->
+                <div class="upload-section">
+                    <h3>📱 Upload from Phone</h3>
+                    <button id="phone-upload-btn" class="nav-button secondary-button">
+                        📱 Start Phone Upload
+                    </button>
+                    
+                    <div id="phone-upload-section">
+                        <div class="qr-container">
+                            <div id="qr-code" class="qr-code"></div>
+                            <div class="upload-url-container">
+                                <div class="upload-url-label">Upload URL:</div>
+                                <div id="upload-url" class="upload-url-display">Starting server...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button id="upload-confirm" class="nav-button" disabled>Select Photos First</button>
+                    <button id="upload-cancel" class="nav-button secondary-button">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>⚙️ Settings</h2>
+                <div class="setting-item">
+                    <label>Slideshow Speed:</label>
+                    <select id="slideshow-speed" title="Slideshow speed setting" aria-label="Slideshow speed">
+                        <option value="3000">Fast (3s)</option>
+                        <option value="5000" selected>Normal (5s)</option>
+                        <option value="10000">Slow (10s)</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label>Weather Location:</label>
+                    <input type="text" id="weather-location" placeholder="Enter city name">
+                </div>
+                <div class="setting-item">
+                    <label>Time Format:</label>
+                    <select id="time-format" title="Time format setting" aria-label="Time format">
+                        <option value="12">12 Hour</option>
+                        <option value="24">24 Hour</option>
+                    </select>
+                </div>
+                <div class="modal-buttons">
+                    <button id="settings-save" class="nav-button">Save Settings</button>
+                    <button id="settings-cancel" class="nav-button secondary-button">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/navigation.js"></script>
+    <script src="js/weather.js"></script>
+    <script src="js/slideshow.js"></script>
+    <script src="js/spotify.js"></script>
+    <script src="js/phone-server.js"></script>
+    <script src="js/upload.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
