@@ -72,6 +72,19 @@ class TVDashboard {
             });
         }
 
+        const cancelAuthBtn = document.getElementById('cancel-auth');
+        if (cancelAuthBtn) {
+            cancelAuthBtn.addEventListener('click', () => {
+                const modal = document.getElementById('spotify-auth-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    if (window.tvNav && window.tvNav.refresh) {
+                        window.tvNav.refresh();
+                    }
+                }
+            });
+        }
+
         const slideshowBtn = document.getElementById('slideshow-toggle');
         if (slideshowBtn) {
             slideshowBtn.addEventListener('click', () => {

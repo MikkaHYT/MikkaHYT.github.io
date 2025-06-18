@@ -4,15 +4,15 @@ class SpotifyService {
         this.currentTrack = null;
         this.isPlaying = false;
         this.updateInterval = null;
-        this.username = null;
+        this.userID = null;
     }
 
     async init() {
-        // Get current user from session
-        this.username = this.getCurrentUser();
+        // Get user ID from global function
+        this.userID = window.getCurrentUserID ? window.getCurrentUserID() : null;
         
-        if (!this.username) {
-            this.showNotification('🔐 Please log in to use Spotify features');
+        if (!this.userID) {
+            this.displayNotConnected();
             return;
         }
 
@@ -32,12 +32,25 @@ class SpotifyService {
     }
 
     getCurrentUser() {
-        // Get username from localStorage (set during login)
-        return localStorage.getItem('username') || null;
+        // Return the auto-assigned user ID
+        return this.userID;
+    }
+
+    updateUser(userID) {
+        this.userID = userID;
+        // Reinitialize if user ID changed
+        this.init();
+    }
+
+    clearUser() {
+        this.userID = null;
+        this.isAuthenticated = false;
+        this.stopStatusUpdates();
+        this.displayNotConnected();
     }
 
     async checkAuthStatus() {
-        if (!this.username) {
+        if (!this.userID) {
             this.isAuthenticated = false;
             return;
         }
@@ -65,7 +78,7 @@ class SpotifyService {
     }
 
     async authenticate() {
-        if (!this.username) {
+        if (!this.userID) {
             this.showNotification('🔐 Please log in first to connect Spotify');
             return;
         }
@@ -75,7 +88,7 @@ class SpotifyService {
     }
 
     async disconnect() {
-        if (!this.username) {
+        if (!this.userID) {
             this.showNotification('🔐 Not logged in');
             return;
         }
@@ -101,7 +114,7 @@ class SpotifyService {
     }
 
     async controlPlayback(action) {
-        if (!this.username) {
+        if (!this.userID) {
             this.showNotification('🔐 Please log in first');
             return;
         }
@@ -138,7 +151,7 @@ class SpotifyService {
     }
 
     async updateStatus() {
-        if (!this.username || !this.isAuthenticated) return;
+        if (!this.userID || !this.isAuthenticated) return;
 
         try {
             const response = await fetch('/spotify-status', {
@@ -232,12 +245,12 @@ class SpotifyService {
         const spotifyWidget = document.getElementById('spotify-widget');
         if (!spotifyWidget) return;
 
-        if (this.username) {
+        if (this.userID) {
             spotifyWidget.innerHTML = `
                 <div class="no-track">
                     <div class="spotify-logo">🎵</div>
                     <div class="message">Connect Spotify</div>
-                    <div class="user-info">Logged in as: ${this.username}</div>
+                    <div class="user-info">User ID: ${this.userID}</div>
                     <button onclick="window.spotifyService.authenticate()" class="connect-btn">
                         Connect Spotify
                     </button>
@@ -247,8 +260,8 @@ class SpotifyService {
             spotifyWidget.innerHTML = `
                 <div class="no-track">
                     <div class="spotify-logo">🎵</div>
-                    <div class="message">Please log in</div>
-                    <div class="user-info">Login required for Spotify features</div>
+                    <div class="message">Loading user ID...</div>
+                    <div class="user-info">Please wait...</div>
                 </div>
             `;
         }
@@ -257,7 +270,7 @@ class SpotifyService {
     updateControls() {
         const controls = document.querySelectorAll('.spotify-control');
         controls.forEach(control => {
-            if (this.isAuthenticated && this.username) {
+            if (this.isAuthenticated && this.userID) {
                 control.style.opacity = '1';
                 control.style.pointerEvents = 'auto';
             } else {
@@ -285,7 +298,7 @@ class SpotifyService {
     }
 
     handleMusicButtonPress() {
-        if (!this.username) {
+        if (!this.userID) {
             this.showNotification('🔐 Please log in first');
             if (window.tvDashboard && window.tvDashboard.showLoginModal) {
                 window.tvDashboard.showLoginModal();
@@ -320,24 +333,6 @@ class SpotifyService {
         } else {
             console.log(message);
         }
-    }
-
-    // Update username when user logs in
-    updateUser(username) {
-        this.username = username;
-        localStorage.setItem('username', username);
-        
-        // Reinitialize if user changed
-        this.init();
-    }
-
-    // Clear user data when user logs out
-    clearUser() {
-        this.username = null;
-        this.isAuthenticated = false;
-        localStorage.removeItem('username');
-        this.stopStatusUpdates();
-        this.displayNotConnected();
     }
 }
 

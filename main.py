@@ -131,19 +131,37 @@ def upload():
             return jsonify({'status': 'success', 'filename': filename})
     return render_template('upload.html')
 
-#####################
-### Spotify OAuth ###
-#####################
+###############
+### TV Page ###
+###############
 
-SPOTIFY_CLIENT_ID = '7064e62e011b4563932083ae28312b16'
-SPOTIFY_CLIENT_SECRET = 'your_spotify_client_secret'  # Get this from Spotify Dashboard
-SPOTIFY_REDIRECT_URI = 'http://localhost:8080/callback'
-db_file = 'spotify_tokens.db'
+ids_db_file = 'ids.db'    # For auto user IDs and Spotify tokens
 
-# Initialize Spotify tokens database
-def init_spotify_db():
-    with sqlite3.connect(db_file) as conn:
+# Initialize IDs database (new)
+def init_ids_db():
+    with sqlite3.connect(ids_db_file) as conn:
         cursor = conn.cursor()
+        
+        # Create auto_users table for automatic user ID assignment
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS auto_users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_fingerprint TEXT UNIQUE,
+                created_at TEXT,
+                last_seen TEXT,
+                is_active INTEGER DEFAULT 1
+            )
+        ''')
+        
+        # Create user_counter table to track the next available user ID
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_counter (
+                id INTEGER PRIMARY KEY,
+                next_user_id INTEGER DEFAULT 1
+            )
+        ''')
+        
+        # Create spotify_tokens table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS spotify_tokens (
                 user_id TEXT PRIMARY KEY,
@@ -155,14 +173,164 @@ def init_spotify_db():
             )
         ''')
         
-
+        # Initialize counter if it doesn't exist
+        cursor.execute('SELECT COUNT(*) FROM user_counter')
+        if cursor.fetchone()[0] == 0:
+            cursor.execute('INSERT INTO user_counter (id, next_user_id) VALUES (1, 1)')
+        
         conn.commit()
 
-init_spotify_db()
+# Initialize database
+init_ids_db()
+
+######################
+### User ID System ###
+######################
+
+def generate_device_fingerprint(request):
+    """Generate a unique device fingerprint based on request headers"""
+    user_agent = request.headers.get('User-Agent', '')
+    accept_language = request.headers.get('Accept-Language', '')
+    accept_encoding = request.headers.get('Accept-Encoding', '')
+    
+    # Combine headers to create a fingerprint
+    fingerprint_data = f"{user_agent}_{accept_language}_{accept_encoding}"
+    
+    # Add IP address (optional, but helps with uniqueness)
+    ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', ''))
+    fingerprint_data += f"_{ip_address}"
+    
+    # Generate hash
+    fingerprint = hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]
+    return fingerprint
+
+def get_or_create_auto_user(device_fingerprint):
+    """Get existing auto user or create a new one"""
+    with sqlite3.connect(ids_db_file) as conn:
+        cursor = conn.cursor()
+        
+        # Check if user already exists
+        cursor.execute('''
+            SELECT user_id FROM auto_users WHERE device_fingerprint = ?
+        ''', (device_fingerprint,))
+        
+        existing_user = cursor.fetchone()
+        
+        if existing_user:
+            # Update last_seen
+            cursor.execute('''
+                UPDATE auto_users SET last_seen = ? WHERE device_fingerprint = ?
+            ''', (datetime.now().isoformat(), device_fingerprint))
+            conn.commit()
+            return existing_user[0]
+        
+        # Create new auto user
+        now = datetime.now().isoformat()
+        
+        # Get next user ID and increment counter
+        cursor.execute('SELECT next_user_id FROM user_counter WHERE id = 1')
+        next_id = cursor.fetchone()[0]
+        
+        # Insert new auto user
+        cursor.execute('''
+            INSERT INTO auto_users (user_id, device_fingerprint, created_at, last_seen)
+            VALUES (?, ?, ?, ?)
+        ''', (next_id, device_fingerprint, now, now))
+        
+        # Increment counter
+        cursor.execute('''
+            UPDATE user_counter SET next_user_id = next_user_id + 1 WHERE id = 1
+        ''')
+        
+        conn.commit()
+        return next_id
+
+@app.route('/request-user-id', methods=['POST'])
+def request_user_id():
+    """Generate or retrieve user ID for TV clients"""
+    try:
+        # Generate device fingerprint
+        device_fingerprint = generate_device_fingerprint(request)
+        
+        # Get or create auto user
+        user_id = get_or_create_auto_user(device_fingerprint)
+        
+        # Store in session
+        session['auto_user_id'] = user_id
+        session['device_fingerprint'] = device_fingerprint
+        
+        return jsonify({
+            'success': True,
+            'user_id': user_id,
+            'device_fingerprint': device_fingerprint,
+            'message': f'User ID {user_id} assigned'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/verify-user-id', methods=['POST'])
+def verify_user_id():
+    """Verify if a user ID is valid and active"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return jsonify({'valid': False, 'message': 'User ID required'}), 400
+        
+        with sqlite3.connect(ids_db_file) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, created_at, is_active FROM auto_users 
+                WHERE user_id = ? AND is_active = 1
+            ''', (user_id,))
+            
+            user = cursor.fetchone()
+            
+            if user:
+                # Update last_seen
+                cursor.execute('''
+                    UPDATE auto_users SET last_seen = ? WHERE user_id = ?
+                ''', (datetime.now().isoformat(), user_id))
+                conn.commit()
+                
+                return jsonify({
+                    'valid': True,
+                    'user_id': user[0],
+                    'created_at': user[1],
+                    'message': f'User ID {user_id} is valid'
+                })
+            else:
+                return jsonify({
+                    'valid': False,
+                    'message': 'Invalid or inactive user ID'
+                })
+                
+    except Exception as e:
+        return jsonify({
+            'valid': False,
+            'error': str(e)
+        }), 500
+
+def get_current_auto_user():
+    """Get current auto user from session"""
+    return session.get('auto_user_id')
+
+#####################
+### Spotify OAuth ###
+#####################
+
+SPOTIFY_CLIENT_ID = '7064e62e011b4563932083ae28312b16'
+SPOTIFY_CLIENT_SECRET = 'your_spotify_client_secret'  # Get this from Spotify Dashboard
+SPOTIFY_REDIRECT_URI = 'http://localhost:8080/callback'
 
 def save_spotify_tokens(user_id, access_token, refresh_token, expires_at, spotify_user_id=None):
-    """Save Spotify tokens to database"""
-    with sqlite3.connect(db_file) as conn:
+    """Save Spotify tokens to ids database"""
+    with sqlite3.connect(ids_db_file) as conn:
         cursor = conn.cursor()
         now = datetime.now().isoformat()
         
@@ -170,24 +338,18 @@ def save_spotify_tokens(user_id, access_token, refresh_token, expires_at, spotif
             INSERT OR REPLACE INTO spotify_tokens 
             (user_id, access_token, refresh_token, expires_at, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, access_token, refresh_token, expires_at.isoformat(), now, now))
+        ''', (f"auto_{user_id}", access_token, refresh_token, expires_at.isoformat(), now, now))
         
-        # Update user's spotify_user_id if provided
-        if spotify_user_id:
-            cursor.execute('''
-                UPDATE users SET spotify_user_id = ? WHERE username = ?
-            ''', (spotify_user_id, user_id))
-            
         conn.commit()
 
 def get_spotify_tokens(user_id):
-    """Get Spotify tokens from database"""
-    with sqlite3.connect(db_file) as conn:
+    """Get Spotify tokens from ids database"""
+    with sqlite3.connect(ids_db_file) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT access_token, refresh_token, expires_at 
             FROM spotify_tokens WHERE user_id = ?
-        ''', (user_id,))
+        ''', (f"auto_{user_id}",))
         row = cursor.fetchone()
         if row:
             return {
@@ -198,43 +360,54 @@ def get_spotify_tokens(user_id):
         return None
 
 def update_spotify_access_token(user_id, access_token, expires_at):
-    """Update access token in database"""
-    with sqlite3.connect(db_file) as conn:
+    """Update access token in ids database"""
+    with sqlite3.connect(ids_db_file) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             UPDATE spotify_tokens 
             SET access_token = ?, expires_at = ?, updated_at = ? 
             WHERE user_id = ?
-        ''', (access_token, expires_at.isoformat(), datetime.now().isoformat(), user_id))
+        ''', (access_token, expires_at.isoformat(), datetime.now().isoformat(), f"auto_{user_id}"))
         conn.commit()
 
-def get_current_user():
-    """Get current authenticated user from session"""
-    return session.get('username')
-
-def create_user_session(username):
-    """Create a user session"""
-    session_id = str(uuid.uuid4())
-    session['username'] = username
-    session['session_id'] = session_id
+def refresh_spotify_token(user_id):
+    """Refresh Spotify access token"""
+    token_info = get_spotify_tokens(user_id)
+    if not token_info:
+        return False
     
-    # Update user's session_id in database
-    with sqlite3.connect(db_file) as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE users SET session_id = ? WHERE username = ?
-        ''', (session_id, username))
-        conn.commit()
+    refresh_data = {
+        'grant_type': 'refresh_token',
+        'refresh_token': token_info['refresh_token'],
+        'client_id': SPOTIFY_CLIENT_ID
+    }
     
-    return session_id
+    response = requests.post(
+        'https://accounts.spotify.com/api/token',
+        data=refresh_data,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'}
+    )
+    
+    if response.status_code == 200:
+        new_tokens = response.json()
+        expires_at = datetime.now() + timedelta(seconds=new_tokens['expires_in'])
+        
+        update_spotify_access_token(
+            user_id,
+            new_tokens['access_token'],
+            expires_at
+        )
+        return True
+    
+    return False
 
 @app.route('/spotify-login')
 def spotify_login():
     """Initiate Spotify OAuth flow"""
-    # Check if user is logged in
-    current_user = get_current_user()
+    # Check if auto user exists
+    current_user = get_current_auto_user()
     if not current_user:
-        return jsonify({'error': 'Please log in first'}), 401
+        return jsonify({'error': 'Please refresh the page to get a user ID'}), 401
     
     # Generate state and code challenge for security
     state = secrets.token_urlsafe(16)
@@ -272,9 +445,9 @@ def spotify_callback():
         return f"Spotify authorization error: {error}", 400
     
     # Verify state and user session
-    current_user = get_current_user()
+    current_user = get_current_auto_user()
     if not current_user:
-        return "User session expired. Please log in again.", 401
+        return "User session expired. Please refresh the page.", 401
         
     if not code or state != session.get('spotify_state'):
         return "Invalid state or missing code", 400
@@ -312,7 +485,7 @@ def spotify_callback():
         if user_info_response.status_code == 200:
             spotify_user_id = user_info_response.json().get('id')
         
-        # Save tokens to database
+        # Save tokens to ids database
         save_spotify_tokens(
             current_user,
             tokens['access_token'],
@@ -332,9 +505,9 @@ def spotify_callback():
 @app.route('/spotify-status')
 def spotify_status():
     """Get current Spotify playback status"""
-    current_user = get_current_user()
+    current_user = get_current_auto_user()
     if not current_user:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'No user ID found'}), 401
     
     token_info = get_spotify_tokens(current_user)
     if not token_info:
@@ -366,9 +539,9 @@ def spotify_status():
 @app.route('/spotify-control', methods=['POST'])
 def spotify_control():
     """Control Spotify playback"""
-    current_user = get_current_user()
+    current_user = get_current_auto_user()
     if not current_user:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'No user ID found'}), 401
     
     token_info = get_spotify_tokens(current_user)
     if not token_info:
@@ -402,93 +575,19 @@ def spotify_control():
     else:
         return jsonify({'error': 'Control action failed', 'details': response.text}), response.status_code
 
-def refresh_spotify_token(user_id):
-    """Refresh Spotify access token"""
-    token_info = get_spotify_tokens(user_id)
-    if not token_info:
-        return False
-    
-    refresh_data = {
-        'grant_type': 'refresh_token',
-        'refresh_token': token_info['refresh_token'],
-        'client_id': SPOTIFY_CLIENT_ID
-    }
-    
-    response = requests.post(
-        'https://accounts.spotify.com/api/token',
-        data=refresh_data,
-        headers={'Content-Type': 'application/x-www-form-urlencoded'}
-    )
-    
-    if response.status_code == 200:
-        new_tokens = response.json()
-        expires_at = datetime.now() + timedelta(seconds=new_tokens['expires_in'])
-        
-        update_spotify_access_token(
-            user_id,
-            new_tokens['access_token'],
-            expires_at
-        )
-        return True
-    
-    return False
-
 @app.route('/spotify-disconnect', methods=['POST'])
 def spotify_disconnect():
     """Disconnect Spotify from user account"""
-    current_user = get_current_user()
+    current_user = get_current_auto_user()
     if not current_user:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'No user ID found'}), 401
     
-    with sqlite3.connect(db_file) as conn:
+    with sqlite3.connect(ids_db_file) as conn:
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM spotify_tokens WHERE user_id = ?', (current_user,))
-        cursor.execute('UPDATE users SET spotify_user_id = NULL WHERE username = ?', (current_user,))
+        cursor.execute('DELETE FROM spotify_tokens WHERE user_id = ?', (f"auto_{current_user}",))
         conn.commit()
     
     return jsonify({'success': True})
-
-# Update the login handler to create proper sessions
-@socketio.on('login')
-def handle_login(data):
-    username = data.get('username')
-    password = data.get('password')
-
-    with sqlite3.connect(db_file) as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
-        user = cursor.fetchone()
-
-    if user:
-        # Create user session
-        session_id = create_user_session(username)
-        emit('login_success', {'username': username, 'session_id': session_id})
-    else:
-        emit('login_failure', {'message': 'Invalid username or password'})
-
-@socketio.on('register')
-def handle_register(data):
-    username = data.get('username')
-    password = data.get('password')
-
-    with sqlite3.connect(db_file) as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
-        user = cursor.fetchone()
-
-        if user:
-            emit('register_failure', {'message': 'Username already exists'})
-        else:
-            cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
-            conn.commit()
-            
-            # Create user session
-            session_id = create_user_session(username)
-            emit('register_success', {'message': 'Registration successful', 'username': username, 'session_id': session_id})
-
-            # Ensure /callback route is registered for Spotify OAuth
-            # (Already implemented above as @app.route('/callback'))
-            # No additional code needed here, as the /callback handler is present and correct.
 
 ###################
 ### Chat Server ###
