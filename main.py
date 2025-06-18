@@ -326,7 +326,7 @@ def get_current_auto_user():
 
 SPOTIFY_CLIENT_ID = '7064e62e011b4563932083ae28312b16'
 SPOTIFY_CLIENT_SECRET = 'd7bb179a6a494295a2013893f809805c'  # Get this from Spotify Dashboard
-SPOTIFY_REDIRECT_URI = 'http://814850.xyz/callback'
+SPOTIFY_REDIRECT_URI = 'https://814850.xyz/callback'
 
 def save_spotify_tokens(user_id, access_token, refresh_token, expires_at, spotify_user_id=None):
     """Save Spotify tokens to ids database"""
