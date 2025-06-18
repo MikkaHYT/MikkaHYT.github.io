@@ -250,7 +250,6 @@ class SpotifyService {
                 <div class="no-track">
                     <div class="spotify-logo">🎵</div>
                     <div class="message">Connect Spotify</div>
-                    <div class="user-info">User ID: ${this.userID}</div>
                     <button onclick="window.spotifyService.authenticate()" class="connect-btn">
                         Connect Spotify
                     </button>
@@ -260,8 +259,7 @@ class SpotifyService {
             spotifyWidget.innerHTML = `
                 <div class="no-track">
                     <div class="spotify-logo">🎵</div>
-                    <div class="message">Loading user ID...</div>
-                    <div class="user-info">Please wait...</div>
+                
                 </div>
             `;
         }

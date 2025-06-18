@@ -407,7 +407,11 @@ def spotify_login():
     # Check if auto user exists
     current_user = get_current_auto_user()
     if not current_user:
-        return jsonify({'error': 'Please refresh the page to get a user ID'}), 401
+        # Try to get a user ID for this session
+        device_fingerprint = generate_device_fingerprint(request)
+        current_user = get_or_create_auto_user(device_fingerprint)
+        session['auto_user_id'] = current_user
+        session['device_fingerprint'] = device_fingerprint
     
     # Generate state and code challenge for security
     state = secrets.token_urlsafe(16)
@@ -419,6 +423,9 @@ def spotify_login():
     # Store in session with user context
     session['spotify_state'] = state
     session['spotify_code_verifier'] = code_verifier
+    session['spotify_user_id'] = current_user  # Store user ID with OAuth session
+    
+    print(f"Generated OAuth state: {state} for user {current_user}")  # Debug log
     
     # Build authorization URL
     auth_params = {
@@ -441,16 +448,25 @@ def spotify_callback():
     state = request.args.get('state')
     error = request.args.get('error')
     
+    print(f"Callback received - State: {state}, Code: {code[:10] if code else None}...")  # Debug log
+    
     if error:
         return f"Spotify authorization error: {error}", 400
     
-    # Verify state and user session
-    current_user = get_current_auto_user()
-    if not current_user:
-        return "User session expired. Please refresh the page.", 401
+    # Verify state
+    session_state = session.get('spotify_state')
+    session_user = session.get('spotify_user_id')
+    
+    print(f"Session state: {session_state}, Session user: {session_user}")  # Debug log
+    
+    if not code:
+        return "Authorization code missing", 400
         
-    if not code or state != session.get('spotify_state'):
-        return "Invalid state or missing code", 400
+    if not state or state != session_state:
+        return f"Invalid state. Expected: {session_state}, Got: {state}", 400
+    
+    if not session_user:
+        return "User session missing. Please refresh the page and try again.", 401
     
     # Exchange code for tokens
     token_data = {
@@ -487,16 +503,22 @@ def spotify_callback():
         
         # Save tokens to ids database
         save_spotify_tokens(
-            current_user,
+            session_user,
             tokens['access_token'],
             tokens['refresh_token'],
             expires_at,
             spotify_user_id
         )
         
-        # Clean up session
+        # Update session to maintain user ID
+        session['auto_user_id'] = session_user
+        
+        # Clean up OAuth session data
         session.pop('spotify_state', None)
         session.pop('spotify_code_verifier', None)
+        session.pop('spotify_user_id', None)
+        
+        print(f"Spotify connected successfully for user {session_user}")  # Debug log
         
         return redirect('/tv?spotify=connected')
     else:

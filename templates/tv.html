@@ -7,7 +7,7 @@
     <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
 </head>
 <body>
-        <!-- Loading Screen -->
+    <!-- Loading Screen -->
     <div id="loading-screen">
         <div class="loading-container">
             <h2>🖥️ Initializing TV Dashboard...</h2>
@@ -15,7 +15,8 @@
             <div id="loading-status">Requesting user ID...</div>
         </div>
     </div>
-    <div id="dashboard">
+    
+    <div id="dashboard" style="display: none;">
         <!-- Background Slideshow -->
         <div id="slideshow-container">
             <div id="slideshow"></div>
@@ -39,12 +40,23 @@
                 </div>
             </div>
 
+            <!-- User Info -->
+            <div class="user-info" style="display: none;">
+                <span id="current-user" style="display: none;">User ID: Loading...</span>
+                <button onclick="resetUserID()" class="reset-btn" style="display: none;">🔄 Reset ID</button>
+            </div>
+
             <!-- Spotify Section -->
             <div class="spotify-section">
-                <div id="spotify-container">
+                <div id="spotify-widget">
                     <div class="spotify-loading">
                         <div class="spotify-loading-text">🎵 Loading Spotify...</div>
                     </div>
+                </div>
+                <div class="spotify-controls">
+                    <button class="control-btn spotify-control" onclick="window.spotifyService.previousTrack()">⏮️</button>
+                    <button class="control-btn spotify-control" onclick="window.spotifyService.togglePlayback()">⏯️</button>
+                    <button class="control-btn spotify-control" onclick="window.spotifyService.nextTrack()">⏭️</button>
                 </div>
             </div>
 
@@ -65,26 +77,21 @@
             </div>
         </div>
 
-
-
-
         <!-- Upload Modal -->
         <div id="upload-modal" class="modal hidden">
             <div class="modal-content">
                 <h2>📸 Upload Photos</h2>
                 
-                
-
-                        <div class="session-code-display">
-                <div class="session-code-container">
-                    <div class="session-code-label">📱 Upload Code:</div>
-                    <div id="session-code" class="session-code">------</div>
-                    <div class="session-code-url">
-                        Go to: <span id="upload-url">814850.xyz/upload</span>
+                <div class="session-code-display">
+                    <div class="session-code-container">
+                        <div class="session-code-label">📱 Upload Code:</div>
+                        <div id="session-code" class="session-code">------</div>
+                        <div class="session-code-url">
+                            Go to: <span id="upload-url">814850.xyz/upload</span>
+                        </div>
+                        <button id="new-code-btn" class="nav-button secondary-button">🔄 New Code</button>
                     </div>
-                    <button id="new-code-btn" class="nav-button secondary-button">🔄 New Code</button>
                 </div>
-            </div>
                         
                 <div class="modal-buttons">
                     <button id="upload-cancel" class="nav-button secondary-button">Close</button>
@@ -123,7 +130,7 @@
         </div>
 
         <!-- Spotify Auth Modal -->
-         <div id="spotify-auth-modal" class="modal" style="display: none;">
+        <div id="spotify-auth-modal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h2>🎵 Connect to Spotify</h2>
                 
@@ -162,6 +169,95 @@
         </div>
     </div>
 
+    <style>
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .loading-container {
+            text-align: center;
+            color: white;
+        }
+
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .user-info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+
+        .reset-btn {
+            margin-left: 10px;
+            padding: 5px 10px;
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .spotify-section {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            color: white;
+            min-width: 250px;
+        }
+
+        .spotify-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .control-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+
+    <!-- Load scripts -->
     <script src="static/js/navigation.js"></script>
     <script src="static/js/weather.js"></script>
     <script src="static/js/slideshow.js"></script>
@@ -169,6 +265,140 @@
     <script src="static/js/phone-server.js"></script>
     <script src="static/js/upload.js"></script>
     <script src="static/js/dashboard.js"></script>
-    <script src="static/js/register.js"></script>
+
+    <!-- TV-specific initialization script -->
+    <script>
+        const socket = io();
+        let currentUserID = null;
+
+        // Auto-initialize when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeUser();
+        });
+
+        async function initializeUser() {
+            updateLoadingStatus('Checking for existing user ID...');
+            
+            // Check if user ID already exists in localStorage
+            const savedUserID = localStorage.getItem('tv_user_id');
+            
+            if (savedUserID) {
+                updateLoadingStatus('Verifying existing user ID...');
+                
+                // Verify the saved user ID is still valid
+                const isValid = await verifyUserID(savedUserID);
+                
+                if (isValid) {
+                    currentUserID = parseInt(savedUserID);
+                    showDashboard();
+                    return;
+                } else {
+                    // Remove invalid user ID
+                    localStorage.removeItem('tv_user_id');
+                }
+            }
+            
+            // Request new user ID from server
+            updateLoadingStatus('Requesting new user ID...');
+            await requestNewUserID();
+        }
+
+        async function requestNewUserID() {
+            try {
+                const response = await fetch('/request-user-id', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentUserID = data.user_id;
+                    localStorage.setItem('tv_user_id', currentUserID);
+                    updateLoadingStatus(`User ID ${currentUserID} assigned!`);
+                    
+                    setTimeout(() => {
+                        showDashboard();
+                    }, 1000);
+                } else {
+                    updateLoadingStatus('Failed to get user ID: ' + data.error);
+                    setTimeout(requestNewUserID, 3000); // Retry after 3 seconds
+                }
+            } catch (error) {
+                console.error('Error requesting user ID:', error);
+                updateLoadingStatus('Network error. Retrying...');
+                setTimeout(requestNewUserID, 3000); // Retry after 3 seconds
+            }
+        }
+
+        async function verifyUserID(userID) {
+            try {
+                const response = await fetch('/verify-user-id', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ user_id: userID }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                return data.valid;
+            } catch (error) {
+                console.error('Error verifying user ID:', error);
+                return false;
+            }
+        }
+
+        function updateLoadingStatus(message) {
+            const statusElement = document.getElementById('loading-status');
+            if (statusElement) {
+                statusElement.textContent = message;
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('current-user').textContent = `User ID: ${currentUserID}`;
+            
+            // Initialize services after user ID is set
+            initializeAllServices();
+        }
+
+        function resetUserID() {
+            if (confirm('Are you sure you want to reset your User ID? This will disconnect all services.')) {
+                localStorage.removeItem('tv_user_id');
+                currentUserID = null;
+                
+                // Clear all services
+                if (window.spotifyService) {
+                    window.spotifyService.clearUser();
+                }
+                
+                // Reload page to get new ID
+                location.reload();
+            }
+        }
+
+        function initializeAllServices() {
+            // Initialize services in order
+            setTimeout(() => {
+                if (window.spotifyService) {
+                    window.spotifyService.updateUser(currentUserID);
+                }
+                
+                if (window.tvDashboard) {
+                    window.tvDashboard.init();
+                }
+            }, 100);
+        }
+
+        // Expose currentUserID globally for other scripts
+        window.getCurrentUserID = () => currentUserID;
+    </script>
 </body>
 </html>
