@@ -53,11 +53,36 @@
                         <div class="spotify-loading-text">🎵 Loading Spotify...</div>
                     </div>
                 </div>
-                <div class="spotify-controls">
-                    <button class="control-btn spotify-control" onclick="window.spotifyService.previousTrack()">⏮️</button>
-                    <button class="control-btn spotify-control" onclick="window.spotifyService.togglePlayback()">⏯️</button>
-                    <button class="control-btn spotify-control" onclick="window.spotifyService.nextTrack()">⏭️</button>
+                <div id="spotify-controls-container" style="display: none;">
+                    <div class="spotify-controls">
+                        <button class="control-btn spotify-control" onclick="window.spotifyService.previousTrack()">⏮️</button>
+                        <button class="control-btn spotify-control" onclick="window.spotifyService.togglePlayback()">⏯️</button>
+                        <button class="control-btn spotify-control" onclick="window.spotifyService.nextTrack()">⏭️</button>
+                    </div>
                 </div>
+                <script>
+                    // Check Spotify control permission on load
+                    document.addEventListener('DOMContentLoaded', async () => {
+                        try {
+                            const response = await fetch('/spotify-control', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({"action":"play"})
+                            });
+                            if (response.status !== 403) {
+                                document.getElementById('spotify-controls-container').style.display = '';
+                                console.warn('Premium Detected, Spotify controls enabled');
+                            } else {
+                                console.warn('Spotify controls not available, user is not premium');
+                            }
+                        } catch (e) {
+                            // Hide controls on error
+                        }
+                    });
+                </script>
             </div>
 
             <!-- Controls -->

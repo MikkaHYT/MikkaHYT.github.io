@@ -194,25 +194,14 @@ class SpotifyService {
 
         spotifyWidget.innerHTML = `
             <div class="now-playing">
-                <div class="album-art">
-                    <img src="${albumArt}" alt="${track.album.name}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzNiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSIjNjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn46lPC90ZXh0Pgo8L3N2Zz4='">
-                    <div class="play-indicator ${this.isPlaying ? 'playing' : ''}">
-                        ${this.isPlaying ? '⏸️' : '▶️'}
-                    </div>
-                </div>
-                <div class="track-info">
-                    <div class="track-name">${track.name}</div>
-                    <div class="artist-name">${artists}</div>
-                    <div class="album-name">${track.album.name}</div>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress" style="width: ${(data.progress_ms / track.duration_ms) * 100}%"></div>
-                </div>
-                <div class="spotify-actions">
-                    <button onclick="window.spotifyService.disconnect()" class="disconnect-btn" title="Disconnect Spotify">
-                        🔗❌
-                    </button>
-                </div>
+            <img class="album-art" src="${albumArt}" alt="${track.album.name}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzNiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSIjNjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn46lPC90ZXh0Pgo8L3N2Zz4='">
+            <div class="track-info">
+                <span class="track-name">${track.name}</span>
+                <span class="artist-name">${artists}</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress" style="width: ${(data.progress_ms / track.duration_ms) * 100}%"></div>
+            </div>
             </div>
         `;
     }

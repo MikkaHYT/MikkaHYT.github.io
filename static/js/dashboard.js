@@ -68,7 +68,7 @@ class TVDashboard {
         const spotifyBtn = document.getElementById('spotify-quick-control');
         if (spotifyBtn) {
             spotifyBtn.addEventListener('click', () => {
-                this.toggleSpotifyPlayer();
+                this.showLoginModal();
             });
         }
 
