@@ -4,6 +4,8 @@ import os
 import sqlite3
 from datetime import datetime
 import json
+import uuid
+import base64
 import threading
 
 app = Flask(__name__)
@@ -13,6 +15,9 @@ socketio = SocketIO(app)
 ###################
 ### Main Site #####
 ###################
+
+tv_sessions = {}  # Store active TV sessions
+session_images = {}  # Store images for each session
 
 @app.route('/')
 def index():
@@ -30,9 +35,92 @@ def imagegen():
 def artistsleak():
     return render_template('artistsleak.html') 
 
-@app.route('/tv')
-def tv():
-    return render_template('tv.html')
+@app.route('/generate-session')
+def generate_session():
+    """Generate a unique 6-digit session code for TV"""
+    while True:
+        session_code = str(uuid.uuid4().hex)[:6].upper()
+        if session_code not in tv_sessions:
+            break
+    
+    tv_sessions[session_code] = {
+        'created_at': datetime.now(),
+        'active': True
+    }
+    session_images[session_code] = []
+    
+    return jsonify({'sessionCode': session_code})
+
+@app.route('/upload-to-session', methods=['POST'])
+def upload_to_session():
+    """Handle image uploads for a specific TV session"""
+    try:
+        data = request.get_json()
+        session_code = data.get('sessionCode')
+        image_data = data.get('imageData')
+        file_name = data.get('fileName')
+        
+        if not session_code or session_code not in tv_sessions:
+            return jsonify({'error': 'Invalid session code'}), 400
+        
+        if not tv_sessions[session_code]['active']:
+            return jsonify({'error': 'Session expired'}), 400
+        
+        # Store the image data
+        if session_code not in session_images:
+            session_images[session_code] = []
+        
+        session_images[session_code].append({
+            'data': image_data,
+            'fileName': file_name,
+            'uploadedAt': datetime.now().isoformat()
+        })
+        
+        # Emit to the specific TV session via Socket.IO
+        socketio.emit('new_image_uploaded', {
+            'sessionCode': session_code,
+            'imageData': image_data,
+            'fileName': file_name
+        }, room=f'tv_session_{session_code}')
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/get-session-images/<session_code>')
+def get_session_images(session_code):
+    """Get all images for a specific session"""
+    if session_code not in session_images:
+        return jsonify({'images': []})
+    
+    return jsonify({'images': session_images[session_code]})
+
+# Add Socket.IO events for TV sessions
+
+@socketio.on('join_tv_session')
+def handle_join_tv_session(data):
+    session_code = data.get('sessionCode')
+    if session_code and session_code in tv_sessions:
+        join_room(f'tv_session_{session_code}')
+        emit('tv_session_joined', {'sessionCode': session_code})
+
+@socketio.on('leave_tv_session')
+def handle_leave_tv_session(data):
+    session_code = data.get('sessionCode')
+    if session_code:
+        leave_room(f'tv_session_{session_code}')
+
+@app.route('/upload', methods=['POST', 'GET'])
+def upload():
+    if request.method == 'POST':
+        file = request.files['file']
+        if file:
+            filename = file.filename
+            file_path = os.path.join(image_upload_dir, filename)
+            file.save(file_path)
+            return jsonify({'status': 'success', 'filename': filename})
+    return render_template('upload.html')
 
 ###################
 ### Chat Server ###

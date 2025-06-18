@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Photos to TV</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .upload-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .code-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .file-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-input:hover {
+            border-color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .upload-btn {
+            width: 100%;
+            padding: 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 15px 0;
+            transition: background 0.3s ease;
+        }
+        .upload-btn:hover {
+            background: #45a049;
+        }
+        .upload-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .success {
+            background: rgba(76, 175, 80, 0.3);
+            border: 1px solid #4CAF50;
+        }
+        .error {
+            background: rgba(244, 67, 54, 0.3);
+            border: 1px solid #f44336;
+        }
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .preview-image {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h1>📸 Upload Photos to TV</h1>
+        
+        <div class="instructions">
+            <p>1. Enter the 6-digit code shown on your TV</p>
+            <p>2. Select photos to upload</p>
+            <p>3. Click upload to send them to your TV slideshow</p>
+        </div>
+
+        <input type="text" 
+               id="session-code" 
+               class="code-input" 
+               placeholder="Enter 6-digit code" 
+               maxlength="6">
+
+        <div class="file-input" onclick="document.getElementById('file-input').click()">
+            <p>📁 Click to select photos</p>
+            <input type="file" 
+                   id="file-input" 
+                   multiple 
+                   accept="image/*" 
+                   style="display: none;" 
+                   onchange="handleFileSelect(event)">
+        </div>
+
+        <div id="preview-container" class="preview-container"></div>
+
+        <button id="upload-btn" class="upload-btn" onclick="uploadImages()" disabled>
+            Upload Photos
+        </button>
+
+        <div id="status"></div>
+    </div>
+
+    <script>
+        let selectedFiles = [];
+
+        function handleFileSelect(event) {
+            selectedFiles = Array.from(event.target.files);
+            displayPreviews();
+            updateUploadButton();
+        }
+
+        function displayPreviews() {
+            const container = document.getElementById('preview-container');
+            container.innerHTML = '';
+            
+            selectedFiles.forEach(file => {
+                const img = document.createElement('img');
+                img.className = 'preview-image';
+                img.src = URL.createObjectURL(file);
+                container.appendChild(img);
+            });
+        }
+
+        function updateUploadButton() {
+            const btn = document.getElementById('upload-btn');
+            const code = document.getElementById('session-code').value;
+            
+            if (selectedFiles.length > 0 && code.length === 6) {
+                btn.disabled = false;
+                btn.textContent = `Upload ${selectedFiles.length} Photos`;
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'Upload Photos';
+            }
+        }
+
+        document.getElementById('session-code').addEventListener('input', updateUploadButton);
+
+        async function uploadImages() {
+            const sessionCode = document.getElementById('session-code').value.toUpperCase();
+            const statusDiv = document.getElementById('status');
+            
+            if (selectedFiles.length === 0) {
+                showStatus('Please select at least one image', 'error');
+                return;
+            }
+
+            if (sessionCode.length !== 6) {
+                showStatus('Please enter a valid 6-digit code', 'error');
+                return;
+            }
+
+            const uploadBtn = document.getElementById('upload-btn');
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Uploading...';
+
+            try {
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    uploadBtn.textContent = `Uploading ${i + 1}/${selectedFiles.length}...`;
+                    
+                    // Convert file to base64
+                    const base64 = await fileToBase64(file);
+                    
+                    // Send to server via Socket.IO or HTTP
+                    const response = await fetch('/upload-to-session', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            sessionCode: sessionCode,
+                            imageData: base64,
+                            fileName: file.name
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Upload failed for ${file.name}`);
+                    }
+                }
+
+                showStatus(`Successfully uploaded ${selectedFiles.length} images!`, 'success');
+                selectedFiles = [];
+                document.getElementById('file-input').value = '';
+                document.getElementById('preview-container').innerHTML = '';
+                
+            } catch (error) {
+                showStatus(`Upload failed: ${error.message}`, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                updateUploadButton();
+            }
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = 'status';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
