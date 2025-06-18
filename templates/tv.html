@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>TV Dashboard</title>
     <link rel="stylesheet" href="static/css/style.css">
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
 </head>
 <body>
     <div id="dashboard">
@@ -56,16 +57,7 @@
             </div>
         </div>
 
-        <div class="session-code-display">
-        <div class="session-code-container">
-            <div class="session-code-label">📱 Upload Code:</div>
-            <div id="session-code" class="session-code">------</div>
-            <div class="session-code-url">
-                Go to: <span id="upload-url">814850.xyz/upload</span>
-            </div>
-            <button id="new-code-btn" class="nav-button secondary-button">🔄 New Code</button>
-        </div>
-    </div>
+
 
 
         <!-- Upload Modal -->
@@ -75,26 +67,18 @@
                 
                 
 
-                <!-- Phone Upload Section -->
-                <div class="upload-section">
-                    <h3>📱 Upload from Phone</h3>
-                    <button id="phone-upload-btn" class="nav-button secondary-button">
-                        📱 Start Phone Upload
-                    </button>
-                    
-                    <div id="phone-upload-section">
-                        <div class="qr-container">
-                            <div id="qr-code" class="qr-code"></div>
-                            <div class="upload-url-container">
-                                <div class="upload-url-label">Upload URL:</div>
-                                <div id="upload-url" class="upload-url-display">Starting server...</div>
-                            </div>
-                        </div>
+                        <div class="session-code-display">
+                <div class="session-code-container">
+                    <div class="session-code-label">📱 Upload Code:</div>
+                    <div id="session-code" class="session-code">------</div>
+                    <div class="session-code-url">
+                        Go to: <span id="upload-url">814850.xyz/upload</span>
                     </div>
+                    <button id="new-code-btn" class="nav-button secondary-button">🔄 New Code</button>
                 </div>
-                
+            </div>
+                        
                 <div class="modal-buttons">
-                    <button id="upload-confirm" class="nav-button" disabled>Select Photos First</button>
                     <button id="upload-cancel" class="nav-button secondary-button">Close</button>
                 </div>
             </div>
@@ -126,6 +110,45 @@
                 <div class="modal-buttons">
                     <button id="settings-save" class="nav-button">Save Settings</button>
                     <button id="settings-cancel" class="nav-button secondary-button">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spotify Auth Modal -->
+         <div id="spotify-auth-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>🎵 Connect to Spotify</h2>
+                
+                <div class="auth-section">
+                    <p>Scan this QR code with your phone to authenticate:</p>
+                    
+                    <div class="qr-container">
+                        <div id="spotify-qr-code" class="qr-code"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&amp;data=https%3A%2F%2Faccounts.spotify.com%2Fauthorize%3Fresponse_type%3Dcode%26client_id%3D7064e62e011b4563932083ae28312b16%26scope%3Duser-read-currently-playing%2Buser-read-playback-state%2Buser-modify-playback-state%2Bstreaming%26redirect_uri%3Dhttp%253A%252F%252Flocalhost%253A8080%252Fcallback%26state%3Dpbb6z8%26code_challenge_method%3DS256%26code_challenge%3Dv06XXtbkOOgkQq23Viweco6-JtoxNZAAghDPwHsgL6w" alt="QR Code" style="max-width: 100%; height: auto;"></div>
+                        <div class="auth-url-container">
+                            <div class="auth-url-label">Or visit this URL:</div>
+                            <div id="spotify-auth-url" class="auth-url-display">https://accounts.spotify.com/authorize?response_type=code&amp;client_id=7064e62e011b4563932083ae28312b16&amp;scope=user-read-currently-playing+user-read-playback-state+user-modify-playback-state+streaming&amp;redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fcallback&amp;state=pbb6z8&amp;code_challenge_method=S256&amp;code_challenge=v06XXtbkOOgkQq23Viweco6-JtoxNZAAghDPwHsgL6w</div>
+                        </div>
+                    </div>
+                    
+                    <div class="auth-instructions">
+                        <p>After authorizing on your phone:</p>
+                        <ol>
+                            <li>You'll be redirected to a page with a code</li>
+                            <li>Enter that code below</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="code-input-section">
+                        <label for="auth-code-input">Authorization Code:</label>
+                        <input type="text" id="auth-code-input" class="auth-code-input" placeholder="Enter the code from your phone">
+                        <button id="submit-auth-code" class="nav-button">Submit Code</button>
+                    </div>
+                    
+                    <div class="auth-status" id="auth-status"></div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button id="cancel-auth" class="nav-button secondary-button">Cancel</button>
                 </div>
             </div>
         </div>

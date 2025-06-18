@@ -1,20 +1,25 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import uuid
 import base64
 import threading
+import requests
+import hashlib
+import secrets
+import urllib.parse
 
 app = Flask(__name__)
 app.config['mikka'] = 'your_secret_key'  # Replace with a secure key
+app.secret_key = 'aptpt'  # Change this to a secure key
 socketio = SocketIO(app)
 
-###################
-### Main Site #####
-###################
+#################
+### Main Site ###
+#################
 
 tv_sessions = {}  # Store active TV sessions
 session_images = {}  # Store images for each session
@@ -125,6 +130,365 @@ def upload():
             file.save(file_path)
             return jsonify({'status': 'success', 'filename': filename})
     return render_template('upload.html')
+
+#####################
+### Spotify OAuth ###
+#####################
+
+SPOTIFY_CLIENT_ID = '7064e62e011b4563932083ae28312b16'
+SPOTIFY_CLIENT_SECRET = 'your_spotify_client_secret'  # Get this from Spotify Dashboard
+SPOTIFY_REDIRECT_URI = 'http://localhost:8080/callback'
+db_file = 'spotify_tokens.db'
+
+# Initialize Spotify tokens database
+def init_spotify_db():
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS spotify_tokens (
+                user_id TEXT PRIMARY KEY,
+                access_token TEXT,
+                refresh_token TEXT,
+                expires_at TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+        ''')
+        
+
+        conn.commit()
+
+init_spotify_db()
+
+def save_spotify_tokens(user_id, access_token, refresh_token, expires_at, spotify_user_id=None):
+    """Save Spotify tokens to database"""
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO spotify_tokens 
+            (user_id, access_token, refresh_token, expires_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, access_token, refresh_token, expires_at.isoformat(), now, now))
+        
+        # Update user's spotify_user_id if provided
+        if spotify_user_id:
+            cursor.execute('''
+                UPDATE users SET spotify_user_id = ? WHERE username = ?
+            ''', (spotify_user_id, user_id))
+            
+        conn.commit()
+
+def get_spotify_tokens(user_id):
+    """Get Spotify tokens from database"""
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT access_token, refresh_token, expires_at 
+            FROM spotify_tokens WHERE user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+        if row:
+            return {
+                'access_token': row[0],
+                'refresh_token': row[1],
+                'expires_at': datetime.fromisoformat(row[2])
+            }
+        return None
+
+def update_spotify_access_token(user_id, access_token, expires_at):
+    """Update access token in database"""
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE spotify_tokens 
+            SET access_token = ?, expires_at = ?, updated_at = ? 
+            WHERE user_id = ?
+        ''', (access_token, expires_at.isoformat(), datetime.now().isoformat(), user_id))
+        conn.commit()
+
+def get_current_user():
+    """Get current authenticated user from session"""
+    return session.get('username')
+
+def create_user_session(username):
+    """Create a user session"""
+    session_id = str(uuid.uuid4())
+    session['username'] = username
+    session['session_id'] = session_id
+    
+    # Update user's session_id in database
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE users SET session_id = ? WHERE username = ?
+        ''', (session_id, username))
+        conn.commit()
+    
+    return session_id
+
+@app.route('/spotify-login')
+def spotify_login():
+    """Initiate Spotify OAuth flow"""
+    # Check if user is logged in
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({'error': 'Please log in first'}), 401
+    
+    # Generate state and code challenge for security
+    state = secrets.token_urlsafe(16)
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).decode().rstrip('=')
+    
+    # Store in session with user context
+    session['spotify_state'] = state
+    session['spotify_code_verifier'] = code_verifier
+    
+    # Build authorization URL
+    auth_params = {
+        'response_type': 'code',
+        'client_id': SPOTIFY_CLIENT_ID,
+        'scope': 'user-read-currently-playing user-read-playback-state user-modify-playback-state streaming user-read-private',
+        'redirect_uri': SPOTIFY_REDIRECT_URI,
+        'state': state,
+        'code_challenge_method': 'S256',
+        'code_challenge': code_challenge
+    }
+    
+    auth_url = 'https://accounts.spotify.com/authorize?' + urllib.parse.urlencode(auth_params)
+    return redirect(auth_url)
+
+@app.route('/callback')
+def spotify_callback():
+    """Handle Spotify OAuth callback"""
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+    
+    if error:
+        return f"Spotify authorization error: {error}", 400
+    
+    # Verify state and user session
+    current_user = get_current_user()
+    if not current_user:
+        return "User session expired. Please log in again.", 401
+        
+    if not code or state != session.get('spotify_state'):
+        return "Invalid state or missing code", 400
+    
+    # Exchange code for tokens
+    token_data = {
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': SPOTIFY_REDIRECT_URI,
+        'client_id': SPOTIFY_CLIENT_ID,
+        'code_verifier': session.get('spotify_code_verifier')
+    }
+    
+    token_headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    
+    token_response = requests.post(
+        'https://accounts.spotify.com/api/token',
+        data=token_data,
+        headers=token_headers
+    )
+    
+    if token_response.status_code == 200:
+        tokens = token_response.json()
+        expires_at = datetime.now() + timedelta(seconds=tokens['expires_in'])
+        
+        # Get Spotify user info
+        user_info_response = requests.get(
+            'https://api.spotify.com/v1/me',
+            headers={'Authorization': f"Bearer {tokens['access_token']}"}
+        )
+        
+        spotify_user_id = None
+        if user_info_response.status_code == 200:
+            spotify_user_id = user_info_response.json().get('id')
+        
+        # Save tokens to database
+        save_spotify_tokens(
+            current_user,
+            tokens['access_token'],
+            tokens['refresh_token'],
+            expires_at,
+            spotify_user_id
+        )
+        
+        # Clean up session
+        session.pop('spotify_state', None)
+        session.pop('spotify_code_verifier', None)
+        
+        return redirect('/tv?spotify=connected')
+    else:
+        return f"Failed to get tokens: {token_response.text}", 400
+
+@app.route('/spotify-status')
+def spotify_status():
+    """Get current Spotify playback status"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    token_info = get_spotify_tokens(current_user)
+    if not token_info:
+        return jsonify({'error': 'Spotify not connected'}), 401
+    
+    # Check if token is expired and refresh if needed
+    if datetime.now() >= token_info['expires_at']:
+        if not refresh_spotify_token(current_user):
+            return jsonify({'error': 'Token expired and refresh failed'}), 401
+        # Get updated tokens
+        token_info = get_spotify_tokens(current_user)
+    
+    headers = {
+        'Authorization': f"Bearer {token_info['access_token']}"
+    }
+    
+    response = requests.get(
+        'https://api.spotify.com/v1/me/player',
+        headers=headers
+    )
+    
+    if response.status_code == 200:
+        return jsonify(response.json())
+    elif response.status_code == 204:
+        return jsonify({'is_playing': False, 'device': None})
+    else:
+        return jsonify({'error': 'Failed to get playback status'}), response.status_code
+
+@app.route('/spotify-control', methods=['POST'])
+def spotify_control():
+    """Control Spotify playback"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    token_info = get_spotify_tokens(current_user)
+    if not token_info:
+        return jsonify({'error': 'Spotify not connected'}), 401
+    
+    # Check if token is expired and refresh if needed
+    if datetime.now() >= token_info['expires_at']:
+        if not refresh_spotify_token(current_user):
+            return jsonify({'error': 'Token expired and refresh failed'}), 401
+        token_info = get_spotify_tokens(current_user)
+    
+    action = request.json.get('action')
+    
+    headers = {
+        'Authorization': f"Bearer {token_info['access_token']}"
+    }
+    
+    if action == 'play':
+        response = requests.put('https://api.spotify.com/v1/me/player/play', headers=headers)
+    elif action == 'pause':
+        response = requests.put('https://api.spotify.com/v1/me/player/pause', headers=headers)
+    elif action == 'next':
+        response = requests.post('https://api.spotify.com/v1/me/player/next', headers=headers)
+    elif action == 'previous':
+        response = requests.post('https://api.spotify.com/v1/me/player/previous', headers=headers)
+    else:
+        return jsonify({'error': 'Invalid action'}), 400
+    
+    if response.status_code in [200, 204]:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': 'Control action failed', 'details': response.text}), response.status_code
+
+def refresh_spotify_token(user_id):
+    """Refresh Spotify access token"""
+    token_info = get_spotify_tokens(user_id)
+    if not token_info:
+        return False
+    
+    refresh_data = {
+        'grant_type': 'refresh_token',
+        'refresh_token': token_info['refresh_token'],
+        'client_id': SPOTIFY_CLIENT_ID
+    }
+    
+    response = requests.post(
+        'https://accounts.spotify.com/api/token',
+        data=refresh_data,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'}
+    )
+    
+    if response.status_code == 200:
+        new_tokens = response.json()
+        expires_at = datetime.now() + timedelta(seconds=new_tokens['expires_in'])
+        
+        update_spotify_access_token(
+            user_id,
+            new_tokens['access_token'],
+            expires_at
+        )
+        return True
+    
+    return False
+
+@app.route('/spotify-disconnect', methods=['POST'])
+def spotify_disconnect():
+    """Disconnect Spotify from user account"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM spotify_tokens WHERE user_id = ?', (current_user,))
+        cursor.execute('UPDATE users SET spotify_user_id = NULL WHERE username = ?', (current_user,))
+        conn.commit()
+    
+    return jsonify({'success': True})
+
+# Update the login handler to create proper sessions
+@socketio.on('login')
+def handle_login(data):
+    username = data.get('username')
+    password = data.get('password')
+
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
+        user = cursor.fetchone()
+
+    if user:
+        # Create user session
+        session_id = create_user_session(username)
+        emit('login_success', {'username': username, 'session_id': session_id})
+    else:
+        emit('login_failure', {'message': 'Invalid username or password'})
+
+@socketio.on('register')
+def handle_register(data):
+    username = data.get('username')
+    password = data.get('password')
+
+    with sqlite3.connect(db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+        user = cursor.fetchone()
+
+        if user:
+            emit('register_failure', {'message': 'Username already exists'})
+        else:
+            cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+            conn.commit()
+            
+            # Create user session
+            session_id = create_user_session(username)
+            emit('register_success', {'message': 'Registration successful', 'username': username, 'session_id': session_id})
+
+            # Ensure /callback route is registered for Spotify OAuth
+            # (Already implemented above as @app.route('/callback'))
+            # No additional code needed here, as the /callback handler is present and correct.
 
 ###################
 ### Chat Server ###

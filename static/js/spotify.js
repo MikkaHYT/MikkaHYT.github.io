@@ -1,647 +1,347 @@
 class SpotifyService {
     constructor() {
-        this.clientId = '7064e62e011b4563932083ae28312b16';
-        this.clientSecret = 'd7bb179a6a494295a2013893f809805c';
-        this.redirectUri = 'http://localhost:8080/callback'; // For Tizen TV
-        this.accessToken = null;
-        this.refreshToken = null;
         this.isAuthenticated = false;
         this.currentTrack = null;
+        this.isPlaying = false;
         this.updateInterval = null;
-        this.authCodeVerifier = null;
-        this.authState = null;
-        this.authPollInterval = null;
-    }    async init() {
-        // Check if we have stored tokens
-        const storedTokens = localStorage.getItem('spotifyTokens');
-        if (storedTokens) {
-            try {
-                const tokens = JSON.parse(storedTokens);
-                this.accessToken = tokens.accessToken;
-                this.refreshToken = tokens.refreshToken;
-                
-                // Test if tokens are still valid
-                const isValid = await this.testConnection();
-                if (isValid) {
-                    this.isAuthenticated = true;
-                    this.startPolling();
-                    this.updateSpotifyUI();
-                    return;
-                }
-            } catch (error) {
-                console.error('Error loading stored tokens:', error);
-                localStorage.removeItem('spotifyTokens');
-            }
+        this.username = null;
+    }
+
+    async init() {
+        // Get current user from session
+        this.username = this.getCurrentUser();
+        
+        if (!this.username) {
+            this.showNotification('🔐 Please log in to use Spotify features');
+            return;
         }
+
+        // Check if user just completed authentication
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('spotify') === 'connected') {
+            this.showNotification('🎵 Spotify connected successfully!');
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        await this.checkAuthStatus();
         
-        // Show disabled UI if not authenticated
-        this.showDisabledUI();
+        if (this.isAuthenticated) {
+            this.startStatusUpdates();
+        }
     }
 
-    showDisabledUI() {
-        const spotifyContainer = document.getElementById('spotify-container');
-        spotifyContainer.innerHTML = `
-            <div class="spotify-disabled">
-                <div style="font-size: 1.2rem; opacity: 0.5; margin-bottom: 10px;">🎵 Spotify</div>
-                <div style="font-size: 0.9rem; opacity: 0.4;">Press "Music" button to connect</div>
-            </div>
-        `;
-    }    // Generate PKCE challenge for security
-    generateCodeChallenge() {
-        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-        let array = new Uint8Array(64);
-        crypto.getRandomValues(array);
-        
-        this.authCodeVerifier = Array.from(array, byte => possible[byte % possible.length]).join('');
-        
-        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(this.authCodeVerifier))
-            .then(buffer => {
-                return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-                    .replace(/\+/g, '-')
-                    .replace(/\//g, '_')
-                    .replace(/=/g, '');
-            });
+    getCurrentUser() {
+        // Get username from localStorage (set during login)
+        return localStorage.getItem('username') || null;
     }
 
-    async startAuth() {
+    async checkAuthStatus() {
+        if (!this.username) {
+            this.isAuthenticated = false;
+            return;
+        }
+
         try {
-            // Generate PKCE challenge
-            const codeChallenge = await this.generateCodeChallenge();
-            this.authState = Math.random().toString(36).substring(7);
-            
-            // Create authorization URL
-            const scopes = [
-                'user-read-currently-playing',
-                'user-read-playback-state',
-                'user-modify-playback-state',
-                'streaming'
-            ].join(' ');
-            
-            const authUrl = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
-                response_type: 'code',
-                client_id: this.clientId,
-                scope: scopes,
-                redirect_uri: this.redirectUri,
-                state: this.authState,
-                code_challenge_method: 'S256',
-                code_challenge: codeChallenge
+            const response = await fetch('/spotify-status', {
+                credentials: 'include' // Include session cookies
             });
             
-            this.showQRCodeAuth(authUrl);
-            
+            if (response.ok) {
+                this.isAuthenticated = true;
+                const data = await response.json();
+                this.updateUI(data);
+            } else if (response.status === 401) {
+                this.isAuthenticated = false;
+                this.displayNotConnected();
+            } else {
+                this.isAuthenticated = false;
+                console.error('Failed to check Spotify status:', response.statusText);
+            }
         } catch (error) {
-            console.error('Spotify authentication setup failed:', error);
-            this.showAuthError();
+            console.error('Failed to check Spotify status:', error);
+            this.isAuthenticated = false;
         }
     }
 
-    showQRCodeAuth(authUrl) {
-        // This method will be called when the Music button is pressed
-        // We'll create a modal similar to the upload modal
-        this.createAuthModal(authUrl);
-    }
-
-    createAuthModal(authUrl) {
-        // Remove existing auth modal if any
-        const existingModal = document.getElementById('spotify-auth-modal');
-        if (existingModal) {
-            existingModal.remove();
+    async authenticate() {
+        if (!this.username) {
+            this.showNotification('🔐 Please log in first to connect Spotify');
+            return;
         }
 
-        const modal = document.createElement('div');
-        modal.id = 'spotify-auth-modal';
-        modal.className = 'modal';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <h2>🎵 Connect to Spotify</h2>
-                
-                <div class="auth-section">
-                    <p>Scan this QR code with your phone to authenticate:</p>
-                    
-                    <div class="qr-container">
-                        <div id="spotify-qr-code" class="qr-code"></div>
-                        <div class="auth-url-container">
-                            <div class="auth-url-label">Or visit this URL:</div>
-                            <div id="spotify-auth-url" class="auth-url-display">${authUrl}</div>
-                        </div>
-                    </div>
-                    
-                    <div class="auth-instructions">
-                        <p>After authorizing on your phone:</p>
-                        <ol>
-                            <li>You'll be redirected to a page with a code</li>
-                            <li>Enter that code below</li>
-                        </ol>
-                    </div>
-                    
-                    <div class="code-input-section">
-                        <label for="auth-code-input">Authorization Code:</label>
-                        <input type="text" id="auth-code-input" class="auth-code-input" placeholder="Enter the code from your phone">
-                        <button id="submit-auth-code" class="nav-button">Submit Code</button>
-                    </div>
-                    
-                    <div class="auth-status" id="auth-status"></div>
-                </div>
-                
-                <div class="modal-actions">
-                    <button id="cancel-auth" class="nav-button secondary-button">Cancel</button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Generate QR code
-        this.generateQRCode(authUrl, 'spotify-qr-code');
-        
-        // Bind events
-        this.bindAuthModalEvents(modal);
-        
-        // Show modal
-        modal.classList.remove('hidden');
-        
-        // Focus on input
-        const input = document.getElementById('auth-code-input');
-        if (input) {
-            setTimeout(() => input.focus(), 100);
+        // Redirect to Spotify login
+        window.location.href = '/spotify-login';
+    }
+
+    async disconnect() {
+        if (!this.username) {
+            this.showNotification('🔐 Not logged in');
+            return;
         }
-    }
 
-    generateQRCode(text, containerId) {
-        // Simple QR code generation using a service
-        const qrContainer = document.getElementById(containerId);
-        if (qrContainer) {
-            qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}" alt="QR Code" style="max-width: 100%; height: auto;">`;
-        }
-    }
-
-    bindAuthModalEvents(modal) {
-        const cancelBtn = modal.querySelector('#cancel-auth');
-        const submitBtn = modal.querySelector('#submit-auth-code');
-        const codeInput = modal.querySelector('#auth-code-input');
-        
-        cancelBtn.addEventListener('click', () => {
-            this.closeAuthModal();
-        });
-        
-        submitBtn.addEventListener('click', () => {
-            const code = codeInput.value.trim();
-            if (code) {
-                this.exchangeCodeForToken(code);
-            }
-        });
-        
-        codeInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const code = codeInput.value.trim();
-                if (code) {
-                    this.exchangeCodeForToken(code);
-                }
-            }
-        });
-    }
-
-    async exchangeCodeForToken(authCode) {
-        const statusDiv = document.getElementById('auth-status');
-        statusDiv.innerHTML = '<div style="color: #ffd700;">🔄 Authenticating...</div>';
-        
         try {
-            const response = await fetch('https://accounts.spotify.com/api/token', {
+            const response = await fetch('/spotify-disconnect', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    grant_type: 'authorization_code',
-                    code: authCode,
-                    redirect_uri: this.redirectUri,
-                    client_id: this.clientId,
-                    client_secret: this.clientSecret,
-                    code_verifier: this.authCodeVerifier
-                })
+                credentials: 'include'
             });
 
             if (response.ok) {
-                const data = await response.json();
-                this.accessToken = data.access_token;
-                this.refreshToken = data.refresh_token;
-                
-                // Store tokens
-                localStorage.setItem('spotifyTokens', JSON.stringify({
-                    accessToken: this.accessToken,
-                    refreshToken: this.refreshToken,
-                    expiresAt: Date.now() + (data.expires_in * 1000)
-                }));
-                
-                this.isAuthenticated = true;
-                statusDiv.innerHTML = '<div style="color: #1DB954;">✅ Successfully authenticated!</div>';
-                
-                // Close modal and start using Spotify
-                setTimeout(() => {
-                    this.closeAuthModal();
-                    this.startPolling();
-                    this.updateSpotifyUI();
-                    
-                    if (window.tvDashboard) {
-                        window.tvDashboard.showNotification('🎵 Spotify connected successfully!');
-                    }
-                }, 2000);
-                
+                this.isAuthenticated = false;
+                this.showNotification('🎵 Spotify disconnected');
+                this.displayNotConnected();
+                this.stopStatusUpdates();
             } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error_description || 'Authentication failed');
+                this.showNotification('🎵 ❌ Failed to disconnect Spotify');
             }
         } catch (error) {
-            console.error('Token exchange failed:', error);
-            statusDiv.innerHTML = `<div style="color: #ff6b6b;">❌ Authentication failed: ${error.message}</div>`;
+            console.error('Spotify disconnect error:', error);
+            this.showNotification('🎵 ❌ Failed to disconnect Spotify');
         }
     }
 
-    closeAuthModal() {
-        const modal = document.getElementById('spotify-auth-modal');
-        if (modal) {
-            modal.remove();
+    async controlPlayback(action) {
+        if (!this.username) {
+            this.showNotification('🔐 Please log in first');
+            return;
         }
-        
-        // Clear auth state
-        this.authCodeVerifier = null;
-        this.authState = null;
-        
-        if (this.authPollInterval) {
-            clearInterval(this.authPollInterval);
-            this.authPollInterval = null;
-        }
-    }    showAuthError() {
-        const statusDiv = document.getElementById('auth-status');
-        if (statusDiv) {
-            statusDiv.innerHTML = '<div style="color: #ff6b6b;">❌ Authentication failed. Please try again.</div>';
-        } else {
-            // If no status div (not in modal), show notification
-            if (window.tvDashboard) {
-                window.tvDashboard.showNotification('🎵 ❌ Spotify authentication failed');
-            }
-        }
-    }
 
-    updateSpotifyUI() {
-        const spotifyContainer = document.getElementById('spotify-container');
-        
         if (!this.isAuthenticated) {
-            this.showDisabledUI();
+            this.showNotification('🎵 ❌ Please connect Spotify first');
             return;
         }
+
+        try {
+            const response = await fetch('/spotify-control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ action })
+            });
+
+            if (response.ok) {
+                // Update status after a short delay
+                setTimeout(() => this.updateStatus(), 500);
+            } else if (response.status === 401) {
+                this.isAuthenticated = false;
+                this.showNotification('🎵 ❌ Spotify session expired. Please reconnect.');
+                this.displayNotConnected();
+            } else {
+                this.showNotification('🎵 ❌ Control action failed');
+            }
+        } catch (error) {
+            console.error('Spotify control error:', error);
+            this.showNotification('🎵 ❌ Control action failed');
+        }
+    }
+
+    async updateStatus() {
+        if (!this.username || !this.isAuthenticated) return;
+
+        try {
+            const response = await fetch('/spotify-status', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.updateUI(data);
+            } else if (response.status === 401) {
+                this.isAuthenticated = false;
+                this.displayNotConnected();
+                this.stopStatusUpdates();
+            }
+        } catch (error) {
+            console.error('Failed to update Spotify status:', error);
+        }
+    }
+
+    updateUI(data) {
+        this.isPlaying = data.is_playing || false;
         
-        if (!this.currentTrack) {
-            spotifyContainer.innerHTML = `
-                <div class="spotify-idle">
-                    <div style="font-size: 1.2rem; opacity: 0.7;">🎵 Spotify Connected</div>
-                    <div style="font-size: 0.9rem; opacity: 0.5; margin-top: 5px;">No music playing</div>
+        if (data.item) {
+            this.currentTrack = data.item;
+            this.displayNowPlaying(data);
+        } else {
+            this.displayNoTrack();
+        }
+
+        this.updateControls();
+    }
+
+    displayNowPlaying(data) {
+        const spotifyWidget = document.getElementById('spotify-widget');
+        if (!spotifyWidget) return;
+
+        const track = data.item;
+        const artists = track.artists.map(artist => artist.name).join(', ');
+        const albumArt = track.album.images[0]?.url || '';
+
+        spotifyWidget.innerHTML = `
+            <div class="now-playing">
+                <div class="album-art">
+                    <img src="${albumArt}" alt="${track.album.name}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzNiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSIjNjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn46lPC90ZXh0Pgo8L3N2Zz4='">
+                    <div class="play-indicator ${this.isPlaying ? 'playing' : ''}">
+                        ${this.isPlaying ? '⏸️' : '▶️'}
+                    </div>
                 </div>
-            `;
-            return;
-        }
-        
-        const progressPercent = (this.currentTrack.progress / this.currentTrack.duration) * 100;
-        const currentTime = this.formatTime(this.currentTrack.progress);
-        const totalTime = this.formatTime(this.currentTrack.duration);
-        
-        spotifyContainer.innerHTML = `
-            <div class="spotify-player">
                 <div class="track-info">
-                    <img src="${this.currentTrack.image}" alt="Album Art" class="album-art">
-                    <div class="track-details">
-                        <div class="track-name">${this.currentTrack.name}</div>
-                        <div class="track-artist">${this.currentTrack.artist}</div>
-                        <div class="track-album">${this.currentTrack.album}</div>
-                    </div>
+                    <div class="track-name">${track.name}</div>
+                    <div class="artist-name">${artists}</div>
+                    <div class="album-name">${track.album.name}</div>
                 </div>
-                
-                <div class="playback-controls">
-                    <button id="spotify-prev" class="control-btn">⏮️</button>
-                    <button id="spotify-play-pause" class="control-btn main-control">
-                        ${this.currentTrack.isPlaying ? '⏸️' : '▶️'}
+                <div class="progress-bar">
+                    <div class="progress" style="width: ${(data.progress_ms / track.duration_ms) * 100}%"></div>
+                </div>
+                <div class="spotify-actions">
+                    <button onclick="window.spotifyService.disconnect()" class="disconnect-btn" title="Disconnect Spotify">
+                        🔗❌
                     </button>
-                    <button id="spotify-next" class="control-btn">⏭️</button>
-                </div>
-                
-                <div class="progress-section">
-                    <span class="time-current">${currentTime}</span>
-                    <div class="progress-bar-spotify">
-                        <div class="progress-fill-spotify" style="width: ${progressPercent}%"></div>
-                    </div>
-                    <span class="time-total">${totalTime}</span>
                 </div>
             </div>
         `;
-        
-        // Bind control events
-        this.bindPlayerControls();
     }
 
-    bindPlayerControls() {
-        const prevBtn = document.getElementById('spotify-prev');
-        const playPauseBtn = document.getElementById('spotify-play-pause');
-        const nextBtn = document.getElementById('spotify-next');
-        
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => this.previousTrack());
-        }
-        
-        if (playPauseBtn) {
-            playPauseBtn.addEventListener('click', () => this.togglePlayback());
-        }
-          if (nextBtn) {
-            nextBtn.addEventListener('click', () => this.nextTrack());
+    displayNoTrack() {
+        const spotifyWidget = document.getElementById('spotify-widget');
+        if (!spotifyWidget) return;
+
+        if (this.isAuthenticated) {
+            spotifyWidget.innerHTML = `
+                <div class="no-track">
+                    <div class="spotify-logo">🎵</div>
+                    <div class="message">No music playing</div>
+                    <div class="spotify-actions">
+                        <button onclick="window.spotifyService.authenticate()" class="connect-btn">
+                            Open Spotify
+                        </button>
+                        <button onclick="window.spotifyService.disconnect()" class="disconnect-btn">
+                            Disconnect
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            this.displayNotConnected();
         }
     }
 
-    async togglePlayback() {
-        if (!this.currentTrack || !this.accessToken) return;
-        
-        try {
-            const endpoint = this.currentTrack.isPlaying ? 'pause' : 'play';
-            const response = await fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${this.accessToken}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (response.status === 401) {
-                const refreshed = await this.refreshAccessToken();
-                if (refreshed) {
-                    return this.togglePlayback();
-                }
-                return;
-            }
-            
-            if (response.ok || response.status === 204) {
-                // Update local state immediately for better UX
-                this.currentTrack.isPlaying = !this.currentTrack.isPlaying;
-                
-                // Update button
-                const playPauseBtn = document.getElementById('spotify-play-pause');
-                if (playPauseBtn) {
-                    playPauseBtn.textContent = this.currentTrack.isPlaying ? '⏸️' : '▶️';
-                }
-                
-                // Show notification
-                if (window.tvDashboard) {
-                    const action = this.currentTrack.isPlaying ? 'Playing' : 'Paused';
-                    window.tvDashboard.showNotification(`🎵 ${action}: ${this.currentTrack.name}`);
-                }
-                
-                // Refresh current state after a short delay
-                setTimeout(() => this.getCurrentlyPlaying(), 1000);
+    displayNotConnected() {
+        const spotifyWidget = document.getElementById('spotify-widget');
+        if (!spotifyWidget) return;
+
+        if (this.username) {
+            spotifyWidget.innerHTML = `
+                <div class="no-track">
+                    <div class="spotify-logo">🎵</div>
+                    <div class="message">Connect Spotify</div>
+                    <div class="user-info">Logged in as: ${this.username}</div>
+                    <button onclick="window.spotifyService.authenticate()" class="connect-btn">
+                        Connect Spotify
+                    </button>
+                </div>
+            `;
+        } else {
+            spotifyWidget.innerHTML = `
+                <div class="no-track">
+                    <div class="spotify-logo">🎵</div>
+                    <div class="message">Please log in</div>
+                    <div class="user-info">Login required for Spotify features</div>
+                </div>
+            `;
+        }
+    }
+
+    updateControls() {
+        const controls = document.querySelectorAll('.spotify-control');
+        controls.forEach(control => {
+            if (this.isAuthenticated && this.username) {
+                control.style.opacity = '1';
+                control.style.pointerEvents = 'auto';
             } else {
-                console.error('Failed to toggle playback:', response.status);
+                control.style.opacity = '0.5';
+                control.style.pointerEvents = 'none';
             }
-        } catch (error) {
-            console.error('Playback control failed:', error);
+        });
+    }
+
+    startStatusUpdates() {
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
         }
+
+        this.updateInterval = setInterval(() => {
+            this.updateStatus();
+        }, 5000); // Update every 5 seconds
     }
 
-    async nextTrack() {
-        if (!this.accessToken) return;
-        
-        try {
-            const response = await fetch('https://api.spotify.com/v1/me/player/next', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.accessToken}`
-                }
-            });
-            
-            if (response.status === 401) {
-                const refreshed = await this.refreshAccessToken();
-                if (refreshed) {
-                    return this.nextTrack();
-                }
-                return;
-            }
-            
-            if (response.ok || response.status === 204) {
-                if (window.tvDashboard) {
-                    window.tvDashboard.showNotification('🎵 ⏭️ Next track');
-                }
-                
-                // Refresh current state after a short delay
-                setTimeout(() => this.getCurrentlyPlaying(), 1000);
-            } else {
-                console.error('Failed to skip to next track:', response.status);
-            }
-        } catch (error) {
-            console.error('Next track failed:', error);
-        }
-    }
-
-    async previousTrack() {
-        if (!this.accessToken) return;
-          try {
-            const response = await fetch('https://api.spotify.com/v1/me/player/previous', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.accessToken}`
-                }
-            });
-            
-            if (response.status === 401) {
-                const refreshed = await this.refreshAccessToken();
-                if (refreshed) {
-                    return this.previousTrack();
-                }
-                return;
-            }
-            
-            if (response.ok || response.status === 204) {
-                if (window.tvDashboard) {
-                    window.tvDashboard.showNotification('🎵 ⏮️ Previous track');
-                }
-                
-                // Refresh current state after a short delay
-                setTimeout(() => this.getCurrentlyPlaying(), 1000);
-            } else {
-                console.error('Failed to skip to previous track:', response.status);
-            }        } catch (error) {
-            console.error('Previous track failed:', error);
-        }
-    }
-
-    formatTime(ms) {
-        const seconds = Math.floor(ms / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-
-    disconnect() {
+    stopStatusUpdates() {
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
         }
-        
-        if (this.authPollInterval) {
-            clearInterval(this.authPollInterval);
-            this.authPollInterval = null;
-        }
-        
-        this.accessToken = null;
-        this.refreshToken = null;
-        this.isAuthenticated = false;
-        this.currentTrack = null;
-        this.authCodeVerifier = null;
-        this.authState = null;
-        
-        localStorage.removeItem('spotifyTokens');
-        this.showDisabledUI();
-        
-        if (window.tvDashboard) {
-            window.tvDashboard.showNotification('🎵 Spotify disconnected');
-        }
     }
 
-    // Method to handle Music button press
     handleMusicButtonPress() {
-        if (this.isAuthenticated) {
-            // If already authenticated, show current track or player controls
-            this.updateSpotifyUI();
+        if (!this.username) {
+            this.showNotification('🔐 Please log in first');
+            if (window.tvDashboard && window.tvDashboard.showLoginModal) {
+                window.tvDashboard.showLoginModal();
+            }
+            return;
+        }
+
+        if (!this.isAuthenticated) {
+            this.authenticate();
+        } else if (this.currentTrack) {
+            this.controlPlayback(this.isPlaying ? 'pause' : 'play');
         } else {
-            // Start authentication flow
-            this.startAuth();
+            this.showNotification('🎵 No active Spotify session');
         }
     }
 
-    async testConnection() {
-        if (!this.accessToken) return false;
-        
-        try {
-            const response = await fetch('https://api.spotify.com/v1/me', {
-                headers: {
-                    'Authorization': `Bearer ${this.accessToken}`
-                }
-            });
-            
-            if (response.status === 401) {
-                // Token expired, try to refresh
-                if (this.refreshToken) {
-                    return await this.refreshAccessToken();
-                }
-                return false;
-            }
-            
-            return response.ok;
-        } catch (error) {
-            console.error('Spotify connection test failed:', error);
-            return false;
+    togglePlayback() {
+        this.controlPlayback(this.isPlaying ? 'pause' : 'play');
+    }
+
+    nextTrack() {
+        this.controlPlayback('next');
+    }
+
+    previousTrack() {
+        this.controlPlayback('previous');
+    }
+
+    showNotification(message) {
+        if (window.tvDashboard && window.tvDashboard.showNotification) {
+            window.tvDashboard.showNotification(message);
+        } else {
+            console.log(message);
         }
     }
 
-    async refreshAccessToken() {
-        if (!this.refreshToken) return false;
+    // Update username when user logs in
+    updateUser(username) {
+        this.username = username;
+        localStorage.setItem('username', username);
         
-        try {
-            const response = await fetch('https://accounts.spotify.com/api/token', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    grant_type: 'refresh_token',
-                    refresh_token: this.refreshToken,
-                    client_id: this.clientId,
-                    client_secret: this.clientSecret
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                this.accessToken = data.access_token;
-                
-                // Update stored tokens
-                localStorage.setItem('spotifyTokens', JSON.stringify({
-                    accessToken: this.accessToken,
-                    refreshToken: this.refreshToken,
-                    expiresAt: Date.now() + (data.expires_in * 1000)
-                }));
-                
-                return true;
-            } else {
-                console.error('Failed to refresh token');
-                return false;
-            }
-        } catch (error) {
-            console.error('Token refresh failed:', error);
-            return false;
-        }
+        // Reinitialize if user changed
+        this.init();
     }
 
-    startPolling() {
-        // Poll for currently playing track every 5 seconds
-        this.updateInterval = setInterval(() => {
-            this.getCurrentlyPlaying();
-        }, 5000);
-        
-        // Get initial track
-        this.getCurrentlyPlaying();
-    }
-
-    async getCurrentlyPlaying() {
-        if (!this.accessToken) return;
-        
-        try {
-            const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-                headers: {
-                    'Authorization': `Bearer ${this.accessToken}`
-                }
-            });
-            
-            if (response.status === 401) {
-                // Token expired, try to refresh
-                const refreshed = await this.refreshAccessToken();
-                if (refreshed) {
-                    // Retry the request
-                    return this.getCurrentlyPlaying();
-                } else {
-                    // Authentication failed, disconnect
-                    this.disconnect();
-                    return;
-                }
-            }
-            
-            if (response.status === 204) {
-                // No track currently playing
-                this.currentTrack = null;
-                this.updateSpotifyUI();
-                return;
-            }
-            
-            if (response.ok) {
-                const data = await response.json();
-                
-                if (data.item) {
-                    this.currentTrack = {
-                        name: data.item.name,
-                        artist: data.item.artists.map(artist => artist.name).join(', '),
-                        album: data.item.album.name,
-                        image: data.item.album.images[0]?.url || 'https://via.placeholder.com/80x80/1DB954/FFFFFF?text=♪',
-                        duration: data.item.duration_ms,
-                        progress: data.progress_ms || 0,
-                        isPlaying: data.is_playing,
-                        id: data.item.id,
-                        uri: data.item.uri
-                    };
-                    
-                    this.updateSpotifyUI();
-                } else {
-                    this.currentTrack = null;
-                    this.updateSpotifyUI();
-                }
-            }
-        } catch (error) {
-            console.error('Failed to get currently playing:', error);
-        }
+    // Clear user data when user logs out
+    clearUser() {
+        this.username = null;
+        this.isAuthenticated = false;
+        localStorage.removeItem('username');
+        this.stopStatusUpdates();
+        this.displayNotConnected();
     }
 }
 
-window.spotifyService = new SpotifyService();
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    window.spotifyService = new SpotifyService();
+});
