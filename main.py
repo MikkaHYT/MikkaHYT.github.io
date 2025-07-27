@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import os
 import sqlite3
@@ -680,6 +680,10 @@ def timetable():
 @app.route('/login')
 def login():
     return render_template('login.html')
+
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory('static', 'manifest.json')
 
 @app.route('/auth/google', methods=['POST'])
 def google_auth():
