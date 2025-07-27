@@ -1,0 +1,554 @@
+/* Custom Timetable Styles */
+
+:root {
+    --primary-color: #3b82f6;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --text-color: #111827;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --header-color: #f3f4f6;
+}
+
+/* Ensure CSS variables take precedence */
+html {
+    --primary-color: #3b82f6;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+}
+
+/* Timetable Grid Styles */
+.timetable-cell {
+    min-height: 80px;
+    border: 1px solid #e5e7eb;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    background: white;
+}
+
+.timetable-cell:hover {
+    background-color: #f9fafb;
+    box-shadow: inset 0 0 0 2px var(--primary-color);
+}
+
+.timetable-cell:hover .cell-edit-btn {
+    opacity: 1;
+}
+
+.timetable-cell.editing {
+    box-shadow: inset 0 0 0 2px var(--primary-color);
+    background-color: #eff6ff;
+}
+
+.cell-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.cell-edit-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    background: rgba(59, 130, 246, 0.9);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.cell-edit-btn:hover {
+    background: rgba(59, 130, 246, 1);
+}
+
+.timetable-header {
+    background-color: #f8fafc;
+    border: 1px solid #e5e7eb;
+    padding: 12px 8px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+}
+
+.timetable-header:hover {
+    background-color: #f1f5f9;
+}
+
+.timetable-header.editing {
+    background-color: #eff6ff;
+    box-shadow: inset 0 0 0 2px var(--primary-color);
+}
+
+.header-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    text-align: center;
+    font-weight: 600;
+}
+
+.cell-content {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 4px;
+    padding-right: 28px; /* Make room for pencil icon */
+}
+
+.cell-content-display {
+    width: 100%;
+    height: 100%;
+    min-height: 60px;
+    padding: 4px;
+    padding-right: 28px; /* Make room for pencil icon */
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: border-color 0.2s ease-in-out;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+}
+
+.cell-content-display:hover {
+    border-color: var(--primary-color);
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+.cell-content-display:empty:before {
+    content: "Click to edit...";
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.cell-content-hidden {
+    display: none !important;
+}
+
+/* Color Classes */
+.cell-default {
+    background-color: white;
+}
+
+.cell-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.cell-secondary {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.cell-success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.cell-warning {
+    background-color: var(--warning-color);
+    color: white;
+}
+
+.cell-danger {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+/* Auto-save indicator */
+.save-indicator {
+    transition: all 0.3s ease;
+}
+
+.save-indicator.saving {
+    background-color: #f59e0b;
+    animation: pulse 1s infinite;
+}
+
+.save-indicator.saved {
+    background-color: #10b981;
+}
+
+.save-indicator.error {
+    background-color: #ef4444;
+}
+
+/* Customize panel animations */
+.customize-panel-open {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+#customizePanel {
+    transform: translateX(100%);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+#customizePanel:not(.hidden) {
+    transform: translateX(0);
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Revision Features */
+.revision-cell {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.cell-controls {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0);
+    border-radius: 0px;
+    padding: 0px;
+}
+
+.completion-checkbox {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+.difficulty-indicator,
+.priority-indicator {
+    font-size: 12px;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 2px;
+    user-select: none;
+}
+
+.difficulty-easy { color: #10b981; }
+.difficulty-medium { color: #f59e0b; }
+.difficulty-hard { color: #ef4444; }
+
+.priority-low { color: #6b7280; }
+.priority-normal { color: #3b82f6; }
+.priority-high { color: #f59e0b; }
+.priority-urgent { color: #ef4444; }
+
+.cell-content.completed {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* Study Timer Panel */
+#studyTimerPanel {
+    border: 1px solid #e5e7eb;
+}
+
+#timerDisplay {
+    font-family: 'Courier New', monospace;
+    color: #1f2937;
+}
+
+.timer-controls button {
+    transition: all 0.2s;
+}
+
+.timer-controls button:hover {
+    transform: translateY(-1px);
+}
+
+/* Minimized Timer */
+#minimizedTimer {
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+#minimizedTimer:hover {
+    transform: scale(1.05);
+}
+
+/* Notes Panel Styles */
+#notesPanel {
+    transition: all 0.3s ease;
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    height: fit-content;
+}
+
+.note-tab {
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.note-tab:hover {
+    transform: translateY(-1px);
+}
+
+.note-tab.active {
+    font-weight: 600;
+}
+
+/* Todo List Styles */
+#todoList {
+    max-height: 128px;
+    overflow-y: auto;
+}
+
+#todoList::-webkit-scrollbar {
+    width: 4px;
+}
+
+#todoList::-webkit-scrollbar-track {
+    background: #fef3c7;
+}
+
+#todoList::-webkit-scrollbar-thumb {
+    background: #f59e0b;
+    border-radius: 2px;
+}
+
+/* Enhanced Color Picker */
+#customColorPicker {
+    border: 2px solid #d1d5db;
+    transition: border-color 0.2s;
+}
+
+#customColorPicker:hover {
+    border-color: #9ca3af;
+}
+
+/* Main Content Adjustment */
+.flex-1 {
+    transition: margin-right 0.3s ease;
+}
+
+/* Enhanced Cell Controls */
+.cell-controls {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.timetable-cell:hover .cell-controls {
+    opacity: 1;
+}
+
+/* Timer Adjustment Buttons */
+.timer-controls {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+}
+
+.timer-controls button {
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 28px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Completion Animation */
+@keyframes celebrate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.celebration {
+    animation: celebrate 0.5s ease-in-out;
+}
+
+/* Context Menu Enhancements */
+.context-menu {
+    position: absolute;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    padding: 4px 0;
+    z-index: 1000;
+    min-width: 160px;
+}
+
+.context-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: #f3f4f6;
+}
+
+.context-menu-item.danger:hover {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .timetable-cell {
+        min-height: 60px;
+        padding: 6px;
+    }
+    
+    .cell-content {
+        font-size: 12px;
+    }
+    
+    #customizePanel {
+        width: 100%;
+        transform: translateX(100%);
+    }
+}
+
+/* Animation classes */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Print styles */
+@media print {
+    .bg-white {
+        background: white !important;
+    }
+    
+    .shadow-lg {
+        box-shadow: none !important;
+    }
+    
+    button {
+        display: none !important;
+    }
+    
+    nav {
+        display: none !important;
+    }
+    
+    #customizePanel {
+        display: none !important;
+    }
+}
+
+/* Draggable and Resizable Styles */
+.dragging {
+    opacity: 0.8;
+    transform: rotate(1deg);
+    transition: none;
+    user-select: none;
+}
+
+.resize-handle {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 15px;
+    height: 15px;
+    cursor: nw-resize;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.resize-handle:hover {
+    opacity: 1;
+    color: #6b7280;
+}
+
+/* Specific styles for draggable panels */
+#studyTimerPanel.dragging,
+#notesPanel.dragging,
+#minimizedTimer.dragging {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Make sure headers are clearly marked as draggable */
+#studyTimerPanel .flex.items-center.justify-between,
+#notesPanel .bg-yellow-200 {
+    cursor: move;
+    user-select: none;
+}
+
+#minimizedTimer {
+    cursor: move;
+    user-select: none;
+}
+
+/* Prevent text selection during drag */
+.dragging * {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Smooth transitions when not dragging */
+#studyTimerPanel:not(.dragging),
+#notesPanel:not(.dragging),
+#minimizedTimer:not(.dragging) {
+    transition: all 0.2s ease;
+}
+
+/* Make textareas in notes panel resizable when the panel is resized */
+#notesPanel textarea {
+    resize: vertical;
+    min-height: 80px;
+}

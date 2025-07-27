@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Timetable App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-800">Timetable App</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-3">
+                        {% if user.profile_pic %}
+                        <img src="{{ user.profile_pic }}" alt="Profile" class="w-8 h-8 rounded-full">
+                        {% endif %}
+                        <span class="text-gray-700">{{ user.name }}</span>
+                    </div>
+                    <a href="/logout" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="px-4 py-6 sm:px-0">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-900">Your Timetables</h2>
+                    <p class="text-gray-600 mt-2">Create and manage your personalized timetables</p>
+                </div>
+                <button onclick="createNewTimetable()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                    <i class="fas fa-plus"></i>
+                    <span>New Timetable</span>
+                </button>
+            </div>
+
+            <!-- Timetables Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="timetables-grid">
+                {% for timetable in timetables %}
+                <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">{{ timetable.name }}</h3>
+                        <div class="flex space-x-2">
+                            <button onclick="editTimetableName({{ timetable.id }}, '{{ timetable.name }}')" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteTimetable({{ timetable.id }})" class="text-gray-400 hover:text-red-600">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="text-sm text-gray-500 mb-4">
+                        <p><i class="fas fa-calendar-alt mr-2"></i>Created: {{ timetable.created_at.strftime('%B %d, %Y') }}</p>
+                        <p><i class="fas fa-clock mr-2"></i>Updated: {{ timetable.updated_at.strftime('%B %d, %Y') }}</p>
+                    </div>
+                    
+                    <a href="/timetable/{{ timetable.id }}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-2 rounded-md transition-colors">
+                        Open Timetable
+                    </a>
+                </div>
+                {% endfor %}
+                
+                {% if not timetables %}
+                <div class="col-span-full text-center py-12">
+                    <i class="fas fa-calendar-alt text-4xl text-gray-300 mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">No timetables yet</h3>
+                    <p class="text-gray-500 mb-4">Create your first timetable to get started</p>
+                    <button onclick="createNewTimetable()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg">
+                        Create First Timetable
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for creating/editing timetable name -->
+    <div id="timetableModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <h3 id="modalTitle" class="text-lg font-semibold mb-4">Create New Revision Timetable</h3>
+            
+            <!-- Step 1: Basic Info -->
+            <div id="step1" class="step">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Timetable Name</label>
+                    <input type="text" id="timetableName" placeholder="e.g., Final Exams Revision" class="w-full p-3 border border-gray-300 rounded-md">
+                </div>
+                
+                <!-- Theme Selection -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-3">Choose a Theme</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Academic Theme -->
+                        <div class="theme-option border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-blue-500" data-theme="academic">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-gray-800">Academic</h4>
+                                <div class="flex space-x-1">
+                                    <div class="w-4 h-4 rounded bg-blue-600"></div>
+                                    <div class="w-4 h-4 rounded bg-purple-600"></div>
+                                    <div class="w-4 h-4 rounded bg-green-600"></div>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600">Professional and focused colors for serious study sessions</p>
+                        </div>
+                        
+                        <!-- Pastel Theme -->
+                        <div class="theme-option border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400" data-theme="pastel">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-gray-800">Pastel</h4>
+                                <div class="flex space-x-1">
+                                    <div class="w-4 h-4 rounded bg-purple-400"></div>
+                                    <div class="w-4 h-4 rounded bg-cyan-400"></div>
+                                    <div class="w-4 h-4 rounded bg-pink-300"></div>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600">Soft, calming colors to reduce study stress</p>
+                        </div>
+                        
+                        <!-- Vibrant Theme -->
+                        <div class="theme-option border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-pink-500" data-theme="vibrant">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-gray-800">Vibrant</h4>
+                                <div class="flex space-x-1">
+                                    <div class="w-4 h-4 rounded bg-pink-500"></div>
+                                    <div class="w-4 h-4 rounded bg-purple-500"></div>
+                                    <div class="w-4 h-4 rounded bg-cyan-500"></div>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600">Energetic colors to boost motivation and focus</p>
+                        </div>
+                        
+                        <!-- Nature Theme -->
+                        <div class="theme-option border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-green-600" data-theme="nature">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-gray-800">Nature</h4>
+                                <div class="flex space-x-1">
+                                    <div class="w-4 h-4 rounded bg-green-600"></div>
+                                    <div class="w-4 h-4 rounded bg-blue-500"></div>
+                                    <div class="w-4 h-4 rounded bg-teal-600"></div>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600">Earth tones for a natural, balanced study environment</p>
+                        </div>
+                        
+                        <!-- Sunset Theme -->
+                        <div class="theme-option border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-orange-500" data-theme="sunset">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-gray-800">Sunset</h4>
+                                <div class="flex space-x-1">
+                                    <div class="w-4 h-4 rounded bg-orange-500"></div>
+                                    <div class="w-4 h-4 rounded bg-red-500"></div>
+                                    <div class="w-4 h-4 rounded bg-yellow-500"></div>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600">Warm, inspiring colors for creative study sessions</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Study Subjects -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Study Subjects</label>
+                    <div class="space-y-2">
+                        <div class="flex flex-wrap gap-2" id="subjectTags">
+                            <span class="subject-tag">Mathematics</span>
+                            <span class="subject-tag">Science</span>
+                            <span class="subject-tag">English</span>
+                            <span class="subject-tag">History</span>
+                        </div>
+                        <div class="flex">
+                            <input type="text" id="newSubject" placeholder="Add subject..." class="flex-1 p-2 border border-gray-300 rounded-l-md text-sm">
+                            <button onclick="addSubject()" class="bg-blue-600 text-white px-4 py-2 rounded-r-md text-sm hover:bg-blue-700">Add</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                    <button onclick="createTimetableWithTheme()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Create Timetable</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTimetableId = null;
+        let isEditing = false;
+        let selectedTheme = 'academic';
+        let studySubjects = ['Mathematics', 'Science', 'English', 'History'];
+
+        function createNewTimetable() {
+            document.getElementById('modalTitle').textContent = 'Create New Revision Timetable';
+            document.getElementById('timetableName').value = '';
+            currentTimetableId = null;
+            isEditing = false;
+            selectedTheme = 'academic';
+            
+            // Reset theme selection
+            document.querySelectorAll('.theme-option').forEach(option => {
+                option.classList.remove('border-blue-500', 'bg-blue-50');
+            });
+            document.querySelector('[data-theme="academic"]').classList.add('border-blue-500', 'bg-blue-50');
+            
+            // Reset subjects
+            updateSubjectTags();
+            
+            document.getElementById('timetableModal').classList.remove('hidden');
+            document.getElementById('timetableName').focus();
+        }
+
+        function editTimetableName(id, currentName) {
+            document.getElementById('modalTitle').textContent = 'Edit Timetable Name';
+            document.getElementById('timetableName').value = currentName;
+            currentTimetableId = id;
+            isEditing = true;
+            
+            // Hide theme selection for editing
+            document.querySelector('.mb-6').style.display = 'none';
+            
+            document.getElementById('timetableModal').classList.remove('hidden');
+            document.getElementById('timetableName').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('timetableModal').classList.add('hidden');
+            // Show theme selection again
+            document.querySelector('.mb-6').style.display = 'block';
+        }
+
+        // Theme selection
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.theme-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    // Remove selection from all themes
+                    document.querySelectorAll('.theme-option').forEach(opt => {
+                        opt.classList.remove('border-blue-500', 'bg-blue-50');
+                    });
+                    
+                    // Add selection to clicked theme
+                    this.classList.add('border-blue-500', 'bg-blue-50');
+                    selectedTheme = this.dataset.theme;
+                });
+            });
+            
+            // Set default theme
+            document.querySelector('[data-theme="academic"]').classList.add('border-blue-500', 'bg-blue-50');
+        });
+
+        function addSubject() {
+            const input = document.getElementById('newSubject');
+            const subject = input.value.trim();
+            
+            if (subject && !studySubjects.includes(subject)) {
+                studySubjects.push(subject);
+                updateSubjectTags();
+                input.value = '';
+            }
+        }
+
+        function removeSubject(subject) {
+            studySubjects = studySubjects.filter(s => s !== subject);
+            updateSubjectTags();
+        }
+
+        function updateSubjectTags() {
+            const container = document.getElementById('subjectTags');
+            container.innerHTML = studySubjects.map(subject => 
+                `<span class="subject-tag">${subject} <button onclick="removeSubject('${subject}')" class="ml-1 text-red-500 hover:text-red-700">×</button></span>`
+            ).join('');
+        }
+
+        function createTimetableWithTheme() {
+            const name = document.getElementById('timetableName').value.trim() || 'My Revision Timetable';
+            
+            fetch('/api/timetable', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    name: name,
+                    theme: selectedTheme,
+                    subjects: studySubjects
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = `/timetable/${data.id}`;
+                } else {
+                    alert('Failed to create timetable');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to create timetable');
+            });
+
+            closeModal();
+        }
+
+        function saveTimetable() {
+            if (isEditing) {
+                const name = document.getElementById('timetableName').value.trim();
+                if (!name) {
+                    alert('Please enter a timetable name');
+                    return;
+                }
+
+                fetch(`/api/timetable/${currentTimetableId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name: name })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to update timetable');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to update timetable');
+                });
+
+                closeModal();
+            } else {
+                createTimetableWithTheme();
+            }
+        }
+
+        function deleteTimetable(id) {
+            if (confirm('Are you sure you want to delete this timetable? This action cannot be undone.')) {
+                fetch(`/api/timetable/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to delete timetable');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to delete timetable');
+                });
+            }
+        }
+
+        // Enter key support
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('timetableName').addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    saveTimetable();
+                }
+            });
+            
+            document.getElementById('newSubject').addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    addSubject();
+                }
+            });
+        });
+    </script>
+    
+    <style>
+        .subject-tag {
+            display: inline-block;
+            background-color: #e5e7eb;
+            color: #374151;
+            padding: 4px 8px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            margin: 2px;
+        }
+        
+        .theme-option {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .theme-option:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</body>
+</html>

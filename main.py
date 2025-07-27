@@ -1,7 +1,11 @@
-from flask import Flask, render_template, request, jsonify, session, redirect
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import os
 import sqlite3
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from datetime import datetime, timedelta
 import json
 import uuid
@@ -11,6 +15,7 @@ import requests
 import hashlib
 import secrets
 import urllib.parse
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 app.config['mikka'] = 'your_secret_key'  # Replace with a secure key
@@ -610,6 +615,329 @@ def spotify_disconnect():
         conn.commit()
     
     return jsonify({'success': True})
+
+#####################
+### Timetable App ###
+#####################
+
+# Load environment variables
+load_dotenv()
+
+# defs
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-change-this')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///timetable.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Database setup
+db = SQLAlchemy(app)
+
+# Login manager setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Google OAuth settings
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '897054939253-318fpnpmp02vp2b8ffh1bodi2n83hf4g.apps.googleusercontent.com')
+
+# Models
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    google_id = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    profile_pic = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    timetables = db.relationship('Timetable', backref='user', lazy=True)
+
+class Timetable(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False, default='My Timetable')
+    row_headers = db.Column(db.Text, default='[]')  # JSON array of row headers
+    column_headers = db.Column(db.Text, default='[]')  # JSON array of column headers
+    cells_data = db.Column(db.Text, default='{}')  # JSON object of cell data
+    color_scheme = db.Column(db.Text, default='{}')  # JSON object for colors
+    time_slot_mode = db.Column(db.Boolean, default=True)  # True for time slots, False for custom text
+    time_slot_settings = db.Column(db.Text, default='{}')  # JSON object for time slot configuration
+    study_subjects = db.Column(db.Text, default='[]')  # JSON array of study subjects
+    theme = db.Column(db.String(50), default='academic')  # Theme name
+    revision_settings = db.Column(db.Text, default='{}')  # Revision specific settings
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# routes
+@app.route('/timetable')
+def index():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return render_template('login.html')
+
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
+@app.route('/auth/google', methods=['POST'])
+def google_auth():
+    token = request.json.get('idtoken')
+    
+    try:
+        # Verify the token
+        idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        
+        # Get user info
+        google_id = idinfo['sub']
+        email = idinfo['email']
+        name = idinfo['name']
+        profile_pic = idinfo.get('picture', '')
+        
+        # Check if user exists
+        user = User.query.filter_by(google_id=google_id).first()
+        
+        if not user:
+            # Create new user
+            user = User(
+                google_id=google_id,
+                email=email,
+                name=name,
+                profile_pic=profile_pic
+            )
+            db.session.add(user)
+            db.session.commit()
+
+            '''
+            # Create default timetable
+            default_timetable = Timetable(
+                user_id=user.id,
+                name='My Timetable',
+                row_headers=json.dumps(['9:00 - 10:00', '10:15 - 11:15', '11:30 - 12:30', '13:30 - 14:30', '14:45 - 15:45']),
+                column_headers=json.dumps(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']),
+                cells_data=json.dumps({}),
+                color_scheme=json.dumps({
+                    'primary': '#3b82f6',
+                    'secondary': '#64748b',
+                    'success': '#10b981',
+                    'warning': '#f59e0b',
+                    'danger': '#ef4444'
+                }),
+                time_slot_mode=True,
+                time_slot_settings=json.dumps({
+                    'start_time': '9:00',
+                    'slot_duration': 60,
+                    'break_duration': 15,
+                    'lunch_break': {'start': '12:30', 'duration': 60},
+                    'time_format': '24h'
+                })
+            )
+            db.session.add(default_timetable)
+            db.session.commit()
+        '''
+            
+        login_user(user)
+        return jsonify({'success': True})
+        
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid token'}), 400
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    timetables = Timetable.query.filter_by(user_id=current_user.id).all()
+    return render_template('dashboard.html', timetables=timetables, user=current_user)
+
+@app.route('/timetable/<int:timetable_id>')
+@login_required
+def timetable_view(timetable_id):
+    timetable = Timetable.query.filter_by(id=timetable_id, user_id=current_user.id).first_or_404()
+    return render_template('timetable.html', timetable=timetable)
+
+@app.route('/api/timetable/<int:timetable_id>', methods=['GET'])
+@login_required
+def get_timetable(timetable_id):
+    timetable = Timetable.query.filter_by(id=timetable_id, user_id=current_user.id).first_or_404()
+    return jsonify({
+        'id': timetable.id,
+        'name': timetable.name,
+        'row_headers': json.loads(timetable.row_headers),
+        'column_headers': json.loads(timetable.column_headers),
+        'cells_data': json.loads(timetable.cells_data),
+        'color_scheme': json.loads(timetable.color_scheme),
+        'time_slot_mode': getattr(timetable, 'time_slot_mode', True),
+        'time_slot_settings': json.loads(getattr(timetable, 'time_slot_settings', '{}') or '{}'),
+        'study_subjects': json.loads(getattr(timetable, 'study_subjects', '[]') or '[]'),
+        'theme': getattr(timetable, 'theme', 'academic'),
+        'revision_settings': json.loads(getattr(timetable, 'revision_settings', '{}') or '{}')
+    })
+
+@app.route('/api/timetable/<int:timetable_id>', methods=['PUT'])
+@login_required
+def update_timetable(timetable_id):
+    timetable = Timetable.query.filter_by(id=timetable_id, user_id=current_user.id).first_or_404()
+    data = request.json
+    
+    if 'name' in data:
+        timetable.name = data['name']
+    if 'row_headers' in data:
+        timetable.row_headers = json.dumps(data['row_headers'])
+    if 'column_headers' in data:
+        timetable.column_headers = json.dumps(data['column_headers'])
+    if 'cells_data' in data:
+        timetable.cells_data = json.dumps(data['cells_data'])
+    if 'color_scheme' in data:
+        timetable.color_scheme = json.dumps(data['color_scheme'])
+    if 'time_slot_mode' in data:
+        timetable.time_slot_mode = data['time_slot_mode']
+    if 'time_slot_settings' in data:
+        timetable.time_slot_settings = json.dumps(data['time_slot_settings'])
+    if 'study_subjects' in data:
+        timetable.study_subjects = json.dumps(data['study_subjects'])
+    if 'theme' in data:
+        timetable.theme = data['theme']
+    if 'revision_settings' in data:
+        timetable.revision_settings = json.dumps(data['revision_settings'])
+    
+    timetable.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+@app.route('/api/timetable', methods=['POST'])
+@login_required
+def create_timetable():
+    data = request.json
+    name = data.get('name', 'New Revision Timetable')
+    theme = data.get('theme', 'academic')
+    subjects = data.get('subjects', ['Mathematics', 'Science', 'English', 'History'])
+    
+    # Define theme-based color schemes
+    theme_colors = {
+        'academic': {
+            'primary': '#2563eb',      # Blue
+            'secondary': '#7c3aed',    # Purple  
+            'success': '#059669',      # Green
+            'warning': '#d97706',      # Orange
+            'danger': '#dc2626',       # Red
+            'accent': '#0891b2',       # Cyan
+            'background': '#f9fafb',   # Light gray
+            'header': '#f3f4f6'        # Light gray header
+        },
+        'pastel': {
+            'primary': '#8b5cf6',      # Soft Purple
+            'secondary': '#06b6d4',    # Soft Cyan
+            'success': '#10b981',      # Soft Green
+            'warning': '#f59e0b',      # Soft Yellow
+            'danger': '#f87171',       # Soft Pink
+            'accent': '#a78bfa',       # Light Purple
+            'background': '#fef7ff',   # Very light purple
+            'header': '#f5f3ff'        # Light purple header
+        },
+        'vibrant': {
+            'primary': '#ec4899',      # Hot Pink
+            'secondary': '#8b5cf6',    # Purple
+            'success': '#10b981',      # Emerald
+            'warning': '#f59e0b',      # Amber
+            'danger': '#ef4444',       # Red
+            'accent': '#06b6d4',       # Cyan
+            'background': '#fff7ed',   # Very light orange
+            'header': '#fed7aa'        # Light orange header
+        },
+        'nature': {
+            'primary': '#059669',      # Forest Green
+            'secondary': '#0891b2',    # Ocean Blue
+            'success': '#65a30d',      # Lime
+            'warning': '#ca8a04',      # Earth Yellow
+            'danger': '#dc2626',       # Red
+            'accent': '#0d9488',       # Teal
+            'background': '#f0fdf4',   # Very light green
+            'header': '#dcfce7'        # Light green header
+        },
+        'sunset': {
+            'primary': '#ea580c',      # Orange
+            'secondary': '#dc2626',    # Red
+            'success': '#ca8a04',      # Gold
+            'warning': '#f59e0b',      # Amber
+            'danger': '#be123c',       # Deep Red
+            'accent': '#f97316',       # Orange Red
+            'background': '#fff7ed',   # Very light orange
+            'header': '#fed7aa'        # Light orange header
+        }
+    }
+    
+    selected_colors = theme_colors.get(theme, theme_colors['academic'])
+    
+    # Generate automatic cell coloring based on subjects
+    auto_cells_data = {}
+    subject_colors = ['primary', 'secondary', 'success', 'warning', 'danger', 'accent']
+    
+    # Pre-populate more cells with subject colors for demonstration
+    for row_idx in range(5):  # 5 time slots
+        for col_idx in range(5):  # 5 days
+            # Populate more cells (about 70% of the grid)
+            if (row_idx + col_idx) % 3 != 2:  # Skip every 3rd cell instead of only populating every 3rd
+                subject_idx = (row_idx * 2 + col_idx) % len(subjects)  # Better distribution
+                color_idx = subject_idx % len(subject_colors)
+                
+                # Add some variety in priority levels
+                priorities = ['high', 'medium', 'low']
+                priority = priorities[(row_idx + col_idx) % len(priorities)]
+                
+                auto_cells_data[f"{row_idx}-{col_idx}"] = {
+                    'content': subjects[subject_idx],
+                    'color': subject_colors[color_idx],
+                    'subject': subjects[subject_idx],
+                    'priority': priority,
+                    'completed': False
+                }
+    
+    timetable = Timetable(
+        user_id=current_user.id,
+        name=name,
+        row_headers=json.dumps(['9:00 - 10:00', '10:15 - 11:15', '11:30 - 12:30', '13:30 - 14:30', '14:45 - 15:45']),
+        column_headers=json.dumps(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']),
+        cells_data=json.dumps(auto_cells_data),
+        color_scheme=json.dumps(selected_colors),
+        time_slot_mode=True,
+        time_slot_settings=json.dumps({
+            'start_time': '9:00',
+            'slot_duration': 60,
+            'break_duration': 15,
+            'lunch_break': {'start': '12:30', 'duration': 60},
+            'time_format': '24h'
+        }),
+        study_subjects=json.dumps(subjects),
+        theme=theme,
+        revision_settings=json.dumps({
+            'show_progress': True,
+            'auto_color_subjects': True,
+            'study_timer': True,
+            'break_reminders': True,
+            'difficulty_tracking': True
+        })
+    )
+    
+    db.session.add(timetable)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'id': timetable.id})
+
+@app.route('/api/timetable/<int:timetable_id>', methods=['DELETE'])
+@login_required
+def delete_timetable(timetable_id):
+    timetable = Timetable.query.filter_by(id=timetable_id, user_id=current_user.id).first_or_404()
+    db.session.delete(timetable)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
 
 ###################
 ### Chat Server ###

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ timetable.name }} - Timetable App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/timetable.css') }}" rel="stylesheet">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="/dashboard" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <h1 class="text-xl font-bold text-gray-800" id="timetableTitle">{{ timetable.name }}</h1>
+                    <button onclick="editTitle()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button onclick="toggleStudyTimer()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-clock"></i>
+                        <span id="timerText">Start Study</span>
+                    </button>
+                    <button onclick="toggleCustomizePanel()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-palette"></i>
+                        <span>Customize</span>
+                    </button>
+                    <button onclick="toggleNotesPanel()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-sticky-note"></i>
+                        <span>Notes</span>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm text-gray-500" id="saveStatus">Saved</span>
+                        <div class="w-2 h-2 bg-green-500 rounded-full" id="saveIndicator"></div>
+                    </div>
+                    <a href="/logout" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex">
+        <!-- Main Content -->
+        <div class="flex-1 p-6">
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <!-- Timetable Container -->
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse" id="timetableGrid">
+                        <thead>
+                            <tr>
+                                <th class="w-32 h-12 bg-gray-50 border border-gray-200 p-2">
+                                    <div class="text-xs text-gray-500">Time / Days</div>
+                                </th>
+                                <!-- Column headers will be populated by JavaScript -->
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Rows will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Add Row/Column Buttons -->
+                <div class="p-4 bg-gray-50 border-t flex justify-center space-x-4">
+                    <button onclick="addRow()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-plus"></i>
+                        <span>Add Time Slot</span>
+                    </button>
+                    <button onclick="addColumn()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-plus"></i>
+                        <span>Add Day</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Post-it Notes Panel -->
+        <div id="notesPanel" class="fixed bottom-4 right-4 w-80 bg-yellow-100 rounded-lg shadow-lg border-2 border-yellow-300 hidden z-40">
+            <div class="bg-yellow-200 p-2 rounded-t-lg flex items-center justify-between border-b border-yellow-300">
+                <div class="flex items-center space-x-2">
+                    <i class="fas fa-grip-vertical text-yellow-600" title="Drag to move"></i>
+                    <div class="flex space-x-1">
+                        <button onclick="switchNoteTab('general')" class="note-tab active px-3 py-1 text-xs rounded bg-yellow-300 text-yellow-800" data-tab="general">General</button>
+                        <button onclick="switchNoteTab('study')" class="note-tab px-3 py-1 text-xs rounded bg-yellow-200 text-yellow-700 hover:bg-yellow-300" data-tab="study">Study</button>
+                        <button onclick="switchNoteTab('todo')" class="note-tab px-3 py-1 text-xs rounded bg-yellow-200 text-yellow-700 hover:bg-yellow-300" data-tab="todo">To-Do</button>
+                    </div>
+                </div>
+                <button onclick="toggleNotesPanel()" class="text-yellow-800 hover:text-yellow-900">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <!-- General Notes Tab -->
+                <div id="generalNotesTab" class="note-tab-content">
+                    <textarea class="w-full h-32 p-2 bg-yellow-50 border border-yellow-300 rounded resize-none text-sm" 
+                              placeholder="General notes..." id="generalNotes" onchange="saveNotes()"></textarea>
+                </div>
+                <!-- Study Notes Tab -->
+                <div id="studyNotesTab" class="note-tab-content hidden">
+                    <textarea class="w-full h-32 p-2 bg-yellow-50 border border-yellow-300 rounded resize-none text-sm" 
+                              placeholder="Study notes, formulas, key points..." id="studyNotes" onchange="saveNotes()"></textarea>
+                </div>
+                <!-- Todo Tab -->
+                <div id="todoNotesTab" class="note-tab-content hidden">
+                    <div class="space-y-2 max-h-32 overflow-y-auto" id="todoList">
+                        <!-- Todo items will be added dynamically -->
+                    </div>
+                    <div class="flex mt-2">
+                        <input type="text" class="flex-1 p-1 bg-yellow-50 border border-yellow-300 rounded-l text-xs" 
+                               placeholder="Add task..." id="newTodoInput" onkeypress="handleTodoKeypress(event)">
+                        <button onclick="addTodoItem()" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-800 px-2 rounded-r">
+                            <i class="fas fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customize Panel -->
+                <!-- Study Timer Panel -->
+        <div id="studyTimerPanel" class="fixed right-4 top-20 bg-white rounded-lg shadow-lg p-4 hidden z-50 w-80">
+            <div class="flex items-center justify-between mb-4 border-b border-gray-200 pb-2">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-grip-vertical text-gray-400 mr-2" title="Drag to move"></i>
+                    Study Session
+                </h3>
+                <div class="flex space-x-2">
+                    <button onclick="minimizeTimer()" class="text-gray-500 hover:text-gray-700" title="Minimize">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button onclick="toggleStudyTimer()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="text-center mb-4">
+                <div class="text-3xl font-bold text-gray-800" id="timerDisplay">25:00</div>
+                <div class="text-sm text-gray-500" id="sessionType">Focus Session</div>
+            </div>
+            <!-- Time Adjustment Buttons -->
+            <div class="flex justify-center space-x-1 mb-4">
+                <button onclick="adjustTimer(-10)" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">-10</button>
+                <button onclick="adjustTimer(-5)" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">-5</button>
+                <button onclick="adjustTimer(-1)" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">-1</button>
+                <span class="px-2 py-1 text-xs text-gray-600">min</span>
+                <button onclick="adjustTimer(1)" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">+1</button>
+                <button onclick="adjustTimer(5)" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">+5</button>
+                <button onclick="adjustTimer(10)" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">+10</button>
+            </div>
+            <div class="flex space-x-2 mb-4">
+                <button onclick="startTimer()" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg">
+                    <i class="fas fa-play"></i> Start
+                </button>
+                <button onclick="pauseTimer()" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg">
+                    <i class="fas fa-pause"></i> Pause
+                </button>
+                <button onclick="resetTimer()" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg">
+                    <i class="fas fa-stop"></i> Reset
+                </button>
+            </div>
+            <div class="flex space-x-2 mb-4">
+                <!-- Timer Duration Buttons -->
+                <button onclick="setTimerDuration(25)" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">25min</button>
+                <button onclick="setTimerDuration(50)" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">50min</button>
+                <button onclick="setTimerDuration(5)" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">5min Break</button>
+            </div>
+            <div class="border-t pt-4">
+                <h4 class="text-sm font-semibold mb-2">Study Progress</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span>Today:</span>
+                        <span id="timeToday">0h 0m</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span>All-time:</span>
+                        <span id="totalTime">0h 0m</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span>Sessions:</span>
+                        <span id="sessionsToday">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Minimized Timer -->
+        <div id="minimizedTimer" class="fixed bottom-4 left-4 bg-white rounded-full shadow-lg p-3 hidden z-50 cursor-pointer" onclick="maximizeTimer()" title="Drag to move, click to expand">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-grip-vertical text-gray-400 text-xs"></i>
+                <i class="fas fa-clock text-green-600"></i>
+                <span class="text-sm font-bold" id="minimizedTimerDisplay">25:00</span>
+                <button onclick="event.stopPropagation(); maximizeTimer()" class="text-gray-500 hover:text-gray-700 ml-2">
+                    <i class="fas fa-expand"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Customize Panel -->
+        <div id="customizePanel" class="fixed right-4 top-20 bg-white rounded-lg shadow-lg hidden z-50 w-96 max-h-96 overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800">Customize Timetable</h3>
+                    <button onclick="toggleCustomizePanel()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Color Scheme -->
+                <div class="mb-6">
+                    <h4 class="text-md font-medium text-gray-700 mb-3">Color Scheme</h4>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Background Color</label>
+                            <input type="color" id="backgroundColor" value="#f9fafb" onchange="updateColorScheme(true)" class="w-10 h-8 rounded border border-gray-300">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Header Color</label>
+                            <input type="color" id="headerColor" value="#f3f4f6" onchange="updateColorScheme(true)" class="w-10 h-8 rounded border border-gray-300">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Primary Color</label>
+                            <input type="color" id="primaryColor" value="#3b82f6" onchange="updateColorScheme(true)" class="w-10 h-8 rounded border border-gray-300">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Secondary Color</label>
+                            <input type="color" id="secondaryColor" value="#64748b" onchange="updateColorScheme(true)" class="w-10 h-8 rounded border border-gray-300">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Success Color</label>
+                            <input type="color" id="successColor" value="#10b981" onchange="updateColorScheme(true)" class="w-10 h-8 rounded border border-gray-300">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Warning Color</label>
+                            <input type="color" id="warningColor" value="#f59e0b" onchange="updateColorScheme(true)" class="w-10 h-8 rounded border border-gray-300">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Danger Color</label>
+                            <input type="color" id="dangerColor" value="#ef4444" onchange="updateColorScheme(true)" class="w-10 h-8 rounded border border-gray-300">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preset Color Schemes -->
+                <div class="mb-6">
+                    <h4 class="text-md font-medium text-gray-700 mb-3">Preset Themes</h4>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="applyPreset('default')" class="p-2 border rounded text-xs hover:bg-gray-50">Default</button>
+                        <button onclick="applyPreset('ocean')" class="p-2 border rounded text-xs hover:bg-gray-50">Ocean</button>
+                        <button onclick="applyPreset('forest')" class="p-2 border rounded text-xs hover:bg-gray-50">Forest</button>
+                        <button onclick="applyPreset('sunset')" class="p-2 border rounded text-xs hover:bg-gray-50">Sunset</button>
+                        <button onclick="applyPreset('pink')" class="p-2 border rounded text-xs hover:bg-gray-50">Pink</button>
+                        <button onclick="applyPreset('dark')" class="p-2 border rounded text-xs hover:bg-gray-50">Dark</button>
+                    </div>
+                </div>
+
+                <!-- Table Structure -->
+                <div class="mb-6">
+                    <h4 class="text-md font-medium text-gray-700 mb-3">Table Structure</h4>
+                    <div class="space-y-3">
+                        <button onclick="addRow()" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 py-2 px-3 rounded text-sm">
+                            <i class="fas fa-plus mr-2"></i>Add Time Slot
+                        </button>
+                        <button onclick="addColumn()" class="w-full bg-green-100 hover:bg-green-200 text-green-800 py-2 px-3 rounded text-sm">
+                            <i class="fas fa-plus mr-2"></i>Add Day
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Time Slot Settings -->
+                <div class="mb-6">
+                    <h4 class="text-md font-medium text-gray-700 mb-3">Time Settings</h4>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-600">Time Slot Mode</label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="timeSlotMode" onchange="toggleTimeSlotMode()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        
+                        <div id="timeSlotSettings" class="space-y-3">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Start Time</label>
+                                <input type="time" id="startTime" value="09:00" onchange="updateTimeSlotSettings()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Slot Duration (minutes)</label>
+                                <input type="number" id="slotDuration" value="60" min="15" max="180" step="15" onchange="updateTimeSlotSettings()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Break Duration (minutes)</label>
+                                <input type="number" id="breakDuration" value="15" min="0" max="60" step="5" onchange="updateTimeSlotSettings()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Lunch Break Start</label>
+                                <input type="time" id="lunchBreakStart" value="12:30" onchange="updateTimeSlotSettings()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Lunch Duration (minutes)</label>
+                                <input type="number" id="lunchDuration" value="60" min="30" max="120" step="15" onchange="updateTimeSlotSettings()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                            </div>
+                            
+                            <button onclick="generateTimeSlots()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 rounded text-sm">
+                                <i class="fas fa-clock mr-2"></i>Generate Time Slots
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-96 overflow-y-auto">
+            <h3 id="editModalTitle" class="text-lg font-semibold mb-4">Edit Cell</h3>
+            
+            <!-- Formatting Toolbar -->
+            <div class="mb-4 border-b pb-3">
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <select id="fontFamily" onchange="applyFormatting('fontFamily', this.value)" class="text-xs px-2 py-1 border rounded">
+                        <option value="Arial">Arial</option>
+                        <option value="Times New Roman">Times</option>
+                        <option value="Courier New">Courier</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Verdana">Verdana</option>
+                    </select>
+                    <select id="fontSize" onchange="applyFormatting('fontSize', this.value)" class="text-xs px-2 py-1 border rounded">
+                        <option value="10px">10px</option>
+                        <option value="12px" selected>12px</option>
+                        <option value="14px">14px</option>
+                        <option value="16px">16px</option>
+                        <option value="18px">18px</option>
+                        <option value="20px">20px</option>
+                    </select>
+                </div>
+                <div class="flex flex-wrap gap-1">
+                    <button onclick="applyFormatting('bold')" class="px-2 py-1 text-xs border rounded hover:bg-gray-100" id="boldBtn"><b>B</b></button>
+                    <button onclick="applyFormatting('italic')" class="px-2 py-1 text-xs border rounded hover:bg-gray-100" id="italicBtn"><i>I</i></button>
+                    <button onclick="applyFormatting('underline')" class="px-2 py-1 text-xs border rounded hover:bg-gray-100" id="underlineBtn"><u>U</u></button>
+                    <button onclick="applyFormatting('strikethrough')" class="px-2 py-1 text-xs border rounded hover:bg-gray-100" id="strikeBtn"><s>S</s></button>
+                    <input type="color" id="textColorPicker" onchange="applyFormatting('color', this.value)" class="w-8 h-6 border rounded cursor-pointer" title="Text Color">
+                </div>
+            </div>
+            
+            <div id="editModalContent" contenteditable="true" class="w-full h-24 p-3 border border-gray-300 rounded-md overflow-y-auto resize-none" style="min-height: 100px; font-size: 12px; font-family: Arial;"></div>
+            
+            <!-- Color picker for cell -->
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Cell Color</label>
+                <div class="space-y-3">
+                    <!-- Preset colors -->
+                    <div class="flex space-x-2">
+                        <button onclick="setCellColor('default')" class="w-8 h-8 rounded border-2 border-gray-300 bg-white"></button>
+                        <button onclick="setCellColor('primary')" class="w-8 h-8 rounded border-2 border-gray-300" id="primaryColorBtn"></button>
+                        <button onclick="setCellColor('success')" class="w-8 h-8 rounded border-2 border-gray-300" id="successColorBtn"></button>
+                        <button onclick="setCellColor('warning')" class="w-8 h-8 rounded border-2 border-gray-300" id="warningColorBtn"></button>
+                        <button onclick="setCellColor('danger')" class="w-8 h-8 rounded border-2 border-gray-300" id="dangerColorBtn"></button>
+                    </div>
+                    <!-- Custom color picker -->
+                    <div class="flex items-center space-x-2">
+                        <label class="text-xs text-gray-600">Custom:</label>
+                        <input type="color" id="customColorPicker" class="w-8 h-8 rounded border border-gray-300 cursor-pointer" onchange="setCustomCellColor(this.value)">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closeEditModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                <button onclick="saveEdit()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/timetable.js') }}"></script>
+    <script>
+        // Initialize the timetable
+        const timetableId = {{ timetable.id }};
+        window.addEventListener('DOMContentLoaded', function() {
+            initializeTimetable(timetableId);
+        });
+    </script>
+</body>
+</html>
