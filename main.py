@@ -1035,6 +1035,10 @@ def whiteboard():
 def pictionary():
     return render_template('pictionary.html')
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 # Socket.IO events
 #@socketio.on('connect')
 #def handle_connect():
