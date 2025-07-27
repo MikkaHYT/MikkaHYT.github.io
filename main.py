@@ -672,7 +672,7 @@ def load_user(user_id):
 
 # routes
 @app.route('/timetable')
-def index():
+def timetable():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return render_template('login.html')
