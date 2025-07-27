@@ -827,17 +827,17 @@ def create_timetable():
             'danger': '#dc2626',       # Red
             'accent': '#0891b2',       # Cyan
             'background': '#f9fafb',   # Light gray
-            'header': '#f3f4f6'        # Light gray header
-        },
-        'pastel': {
-            'primary': '#8b5cf6',      # Soft Purple
-            'secondary': '#06b6d4',    # Soft Cyan
-            'success': '#10b981',      # Soft Green
-            'warning': '#f59e0b',      # Soft Yellow
-            'danger': '#f87171',       # Soft Pink
-            'accent': '#a78bfa',       # Light Purple
-            'background': '#fef7ff',   # Very light purple
-            'header': '#f5f3ff'        # Light purple header
+            # Light gray header
+            },
+            'pastel': {
+                'primary': '#c4a1ff',      # Pastel Purple
+                'secondary': '#87ceeb',    # Pastel Blue
+                'success': '#98fb98',      # Pastel Green
+                'warning': '#ffb3ba',      # Pastel Pink
+                'danger': '#ffd1dc',       # Pastel Rose
+                'accent': '#dda0dd',       # Pastel Plum
+                'background': '#faf8ff',   # Very light lavender
+                'header': '#f0e6ff'        # Light pastel purple header
         },
         'vibrant': {
             'primary': '#ec4899',      # Hot Pink
