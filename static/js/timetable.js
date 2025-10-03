@@ -23,6 +23,52 @@ let isNotesPanelOpen = false;
 // Color picker variables
 let customCellColor = '#ffffff';
 let currentEditingCell = null;
+let colorLibrary = [];
+
+const COLOR_LIBRARY_ID_PREFIX = 'color-';
+
+function generateColorLibraryId() {
+    return `${COLOR_LIBRARY_ID_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
+}
+
+function normalizeColorLibrary(library) {
+    if (!Array.isArray(library)) {
+        return [];
+    }
+    const normalized = [];
+    const seenIds = new Set();
+    library.forEach((item, index) => {
+        if (!item || typeof item.value !== 'string') {
+            return;
+        }
+        let value = item.value.trim();
+        if (!value.startsWith('#')) {
+            value = `#${value}`;
+        }
+        if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
+            return;
+        }
+        let name = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : `Colour ${normalized.length + 1}`;
+        let id = typeof item.id === 'string' && item.id ? item.id : generateColorLibraryId();
+        if (seenIds.has(id)) {
+            id = generateColorLibraryId();
+        }
+        seenIds.add(id);
+        normalized.push({
+            id,
+            name,
+            value: value.toLowerCase()
+        });
+    });
+    return normalized;
+}
+
+function persistColorLibrary(triggerSave = true) {
+    timetableData.color_library = colorLibrary.map(color => ({ ...color }));
+    if (triggerSave) {
+        scheduleAutoSave();
+    }
+}
 
 let timetableData = {
     id: null,
@@ -41,7 +87,17 @@ let timetableData = {
     },
     study_subjects: [],
     theme: 'academic',
-    revision_settings: {}
+    revision_settings: {},
+    notes_data: {
+        general: '',
+        study: '',
+        todos: []
+    },
+    study_time_data: {
+        totalTimeAllTime: 0,
+        lastSessionDate: null
+    },
+    color_library: []
 };
 
 let saveTimeout = null;
@@ -112,6 +168,35 @@ async function initializeTimetable(id) {
                 timetableData.revision_settings = {};
                 console.log('Initialized empty revision settings');
             }
+            if (!timetableData.notes_data) {
+                timetableData.notes_data = {
+                    general: '',
+                    study: '',
+                    todos: []
+                };
+                console.log('Initialized empty notes data');
+            }
+            if (!timetableData.study_time_data) {
+                timetableData.study_time_data = {
+                    totalTimeAllTime: 0,
+                    lastSessionDate: null
+                };
+                console.log('Initialized empty study time data');
+            }
+            if (!timetableData.color_library) {
+                timetableData.color_library = [];
+                console.log('Initialized empty color library');
+            }
+            colorLibrary = normalizeColorLibrary(timetableData.color_library);
+            timetableData.color_library = colorLibrary.map(color => ({ ...color }));
+            
+            // Load notes and study time data
+            notesData = timetableData.notes_data;
+            totalTimeAllTime = timetableData.study_time_data.totalTimeAllTime || 0;
+            
+            // Load the data into UI elements
+            loadStudyData();
+            loadNotes();
             
             console.log('About to render timetable...');
             renderTimetable();
@@ -217,10 +302,20 @@ function renderTimetable() {
             const displayContent = cellData.richContent || cellData.content || '';
             const plainContent = cellData.content || '';
             
+            // Build display content with time information
+            let cellDisplayContent = displayContent || '<span class="text-gray-400">Click to edit...</span>';
+            
+            // Add time information if available
+            if (cellData.startTime && cellData.endTime) {
+                cellDisplayContent = `<div class="cell-time-display">${cellData.startTime} - ${cellData.endTime}</div>${cellDisplayContent}`;
+            } else if (cellData.startTime) {
+                cellDisplayContent = `<div class="cell-time-display">${cellData.startTime}</div>${cellDisplayContent}`;
+            }
+            
             td.innerHTML = `
                 <div class="cell-wrapper">
                     <div class="cell-content-display" data-cell-key="${cellKey}" onclick="openCellEditModal('${cellKey}')" title="Click to edit">
-                        ${displayContent || '<span class="text-gray-400">Click to edit...</span>'}
+                        ${cellDisplayContent}
                     </div>
                     <textarea class="cell-content-hidden" data-cell-key="${cellKey}" style="display: none;" onchange="updateCell('${cellKey}', this.value, '${cellData.color}')">${plainContent}</textarea>
                     <button class="cell-edit-btn" onclick="openCellEditModal('${cellKey}')" title="Edit cell">
@@ -655,26 +750,25 @@ function playCompletionSound() {
 }
 
 function saveStudyData() {
-    // Save study progress to localStorage
+    // Save study progress to server
     const studyData = {
         totalTimeAllTime: totalTimeAllTime,
         lastSessionDate: new Date().toDateString()
     };
-    localStorage.setItem('studyData', JSON.stringify(studyData));
+    
+    // Update the timetable data
+    timetableData.study_time_data = studyData;
+    
+    // Save to server
+    scheduleAutoSave();
 }
 
 function loadStudyData() {
-    // Load study progress from localStorage
-    const savedData = localStorage.getItem('studyData');
-    if (savedData) {
-        const data = JSON.parse(savedData);
-        totalTimeAllTime = data.totalTimeAllTime || 0;
-        
-        // Update display
-        const allTimeHours = Math.floor(totalTimeAllTime / 60);
-        const allTimeMinutes = totalTimeAllTime % 60;
-        document.getElementById('totalTime').textContent = `${allTimeHours}h ${allTimeMinutes}m`;
-    }
+    // Load study progress from timetable data (already loaded during initialization)
+    // Update display
+    const allTimeHours = Math.floor(totalTimeAllTime / 60);
+    const allTimeMinutes = totalTimeAllTime % 60;
+    document.getElementById('totalTime').textContent = `${allTimeHours}h ${allTimeMinutes}m`;
 }
 
 // Revision Helper Functions
@@ -805,20 +899,20 @@ function saveNotes() {
     notesData.general = document.getElementById('generalNotes').value;
     notesData.study = document.getElementById('studyNotes').value;
     
-    // Save to localStorage
-    localStorage.setItem('notesData', JSON.stringify(notesData));
+    // Update the timetable data
+    timetableData.notes_data = notesData;
+    
+    // Save to server
+    scheduleAutoSave();
 }
 
 function loadNotes() {
-    const savedNotes = localStorage.getItem('notesData');
-    if (savedNotes) {
-        notesData = JSON.parse(savedNotes);
-        document.getElementById('generalNotes').value = notesData.general || '';
-        document.getElementById('studyNotes').value = notesData.study || '';
-        
-        // Load todo items
-        renderTodoList();
-    }
+    // Load notes from timetable data (already loaded during initialization)
+    document.getElementById('generalNotes').value = notesData.general || '';
+    document.getElementById('studyNotes').value = notesData.study || '';
+    
+    // Load todo items
+    renderTodoList();
 }
 
 function addTodoItem() {
@@ -1100,6 +1194,20 @@ function updateColorScheme(shouldSave = true) {
                         cell.classList.add('cell-default');
                         cell.style.backgroundColor = '';
                         console.log(`Applied default color to cell ${cellKey}`);
+                    }
+                    
+                    // Update cell display content with time information
+                    if (cellDisplay) {
+                        let displayContent = cellData.richContent || cellData.content || '<span class="text-gray-400">Click to edit...</span>';
+                        
+                        // Add time information if available
+                        if (cellData.startTime && cellData.endTime) {
+                            displayContent = `<div class="cell-time-display">${cellData.startTime} - ${cellData.endTime}</div>${displayContent}`;
+                        } else if (cellData.startTime) {
+                            displayContent = `<div class="cell-time-display">${cellData.startTime}</div>${displayContent}`;
+                        }
+                        
+                        cellDisplay.innerHTML = displayContent;
                     }
                     
                     // Force a repaint
@@ -1505,7 +1613,17 @@ function scheduleAutoSave() {
                     time_slot_settings: timetableData.time_slot_settings,
                     study_subjects: timetableData.study_subjects || [],
                     theme: timetableData.theme || 'academic',
-                    revision_settings: timetableData.revision_settings || {}
+                    revision_settings: timetableData.revision_settings || {},
+                    notes_data: timetableData.notes_data || {
+                        general: '',
+                        study: '',
+                        todos: []
+                    },
+                    study_time_data: timetableData.study_time_data || {
+                        totalTimeAllTime: 0,
+                        lastSessionDate: null
+                    },
+                    color_library: timetableData.color_library || []
                 })
             });
             
@@ -1604,6 +1722,51 @@ function openCellEditModal(cellKey) {
         editContent.innerHTML = contentToLoad;
     }
     
+    // Load time information
+    const startTimeInput = document.getElementById('cellStartTime');
+    const endTimeInput = document.getElementById('cellEndTime');
+    const useCustomTimeCheckbox = document.getElementById('useCustomTime');
+    
+    if (startTimeInput && endTimeInput && useCustomTimeCheckbox) {
+        if (cellData.startTime) {
+            startTimeInput.value = cellData.startTime;
+            useCustomTimeCheckbox.checked = true;
+        } else {
+            startTimeInput.value = '';
+            useCustomTimeCheckbox.checked = false;
+        }
+        
+        if (cellData.endTime) {
+            endTimeInput.value = cellData.endTime;
+        } else {
+            endTimeInput.value = '';
+        }
+        
+        // Show/hide time inputs based on checkbox
+        startTimeInput.style.display = useCustomTimeCheckbox.checked ? 'block' : 'none';
+        endTimeInput.style.display = useCustomTimeCheckbox.checked ? 'block' : 'none';
+        
+        // Add event listener for checkbox
+        useCustomTimeCheckbox.onchange = function() {
+            startTimeInput.style.display = this.checked ? 'block' : 'none';
+            endTimeInput.style.display = this.checked ? 'block' : 'none';
+            if (!this.checked) {
+                startTimeInput.value = '';
+                endTimeInput.value = '';
+            }
+        };
+        
+        // Add validation for time inputs
+        endTimeInput.onchange = function() {
+            if (startTimeInput.value && endTimeInput.value) {
+                if (startTimeInput.value >= endTimeInput.value) {
+                    alert('End time must be after start time');
+                    endTimeInput.value = '';
+                }
+            }
+        };
+    }
+    
     // Reset formatting controls to default
     const fontFamily = document.getElementById('fontFamily');
     const fontSize = document.getElementById('fontSize');
@@ -1640,14 +1803,27 @@ function saveEdit() {
     if (currentCellBeingEdited) {
         const content = document.getElementById('editModalContent').innerHTML;
         
+        // Get time information
+        const startTimeInput = document.getElementById('cellStartTime');
+        const endTimeInput = document.getElementById('cellEndTime');
+        const useCustomTimeCheckbox = document.getElementById('useCustomTime');
+        
+        let startTime = null;
+        let endTime = null;
+        
+        if (useCustomTimeCheckbox && useCustomTimeCheckbox.checked) {
+            if (startTimeInput) startTime = startTimeInput.value;
+            if (endTimeInput) endTime = endTimeInput.value;
+        }
+        
         // If custom color is selected, use the hex value directly
         let colorToApply = currentCellColor;
         if (currentCellColor.startsWith('#')) {
             // This is a custom hex color, store it as custom with the value
-            updateCellWithCustomColor(currentCellBeingEdited, content, currentCellColor);
+            updateCellWithCustomColorAndTime(currentCellBeingEdited, content, currentCellColor, startTime, endTime);
         } else {
             // This is a preset color
-            updateCell(currentCellBeingEdited, content, currentCellColor);
+            updateCellWithTime(currentCellBeingEdited, content, currentCellColor, startTime, endTime);
         }
         
         // Find the cell display and textarea using data attribute
@@ -1655,8 +1831,17 @@ function saveEdit() {
         const cellTextarea = document.querySelector(`.cell-content-hidden[data-cell-key="${currentCellBeingEdited}"]`);
         
         if (cellDisplay) {
-            // Update the display with rich content immediately
-            cellDisplay.innerHTML = content || '<span class="text-gray-400">Click to edit...</span>';
+            // Update the display with rich content and time information
+            let displayContent = content || '<span class="text-gray-400">Click to edit...</span>';
+            
+            // Add time information if available
+            if (startTime && endTime) {
+                displayContent = `<div class="cell-time-display">${startTime} - ${endTime}</div>${displayContent}`;
+            } else if (startTime) {
+                displayContent = `<div class="cell-time-display">${startTime}</div>${displayContent}`;
+            }
+            
+            cellDisplay.innerHTML = displayContent;
         }
         
         if (cellTextarea) {
@@ -1693,11 +1878,71 @@ function updateCellWithCustomColor(cellKey, content, customColor) {
     scheduleAutoSave();
 }
 
+// New function to update cell with time information
+function updateCellWithTime(cellKey, content, color, startTime, endTime) {
+    if (!timetableData.cells_data[cellKey]) {
+        timetableData.cells_data[cellKey] = {};
+    }
+    timetableData.cells_data[cellKey].content = content.replace(/<[^>]*>/g, ''); // Plain text for compatibility
+    timetableData.cells_data[cellKey].richContent = content; // Rich HTML content
+    timetableData.cells_data[cellKey].color = color;
+    
+    // Handle time information
+    if (startTime) {
+        timetableData.cells_data[cellKey].startTime = startTime;
+    } else {
+        delete timetableData.cells_data[cellKey].startTime;
+    }
+    
+    if (endTime) {
+        timetableData.cells_data[cellKey].endTime = endTime;
+    } else {
+        delete timetableData.cells_data[cellKey].endTime;
+    }
+    
+    scheduleAutoSave();
+}
+
+// New function to update cell with custom color and time information
+function updateCellWithCustomColorAndTime(cellKey, content, customColor, startTime, endTime) {
+    if (!timetableData.cells_data[cellKey]) {
+        timetableData.cells_data[cellKey] = {};
+    }
+    timetableData.cells_data[cellKey].content = content.replace(/<[^>]*>/g, ''); // Plain text for compatibility
+    timetableData.cells_data[cellKey].richContent = content; // Rich HTML content
+    timetableData.cells_data[cellKey].color = 'custom';
+    timetableData.cells_data[cellKey].customColor = customColor;
+    
+    // Handle time information
+    if (startTime) {
+        timetableData.cells_data[cellKey].startTime = startTime;
+    } else {
+        delete timetableData.cells_data[cellKey].startTime;
+    }
+    
+    if (endTime) {
+        timetableData.cells_data[cellKey].endTime = endTime;
+    } else {
+        delete timetableData.cells_data[cellKey].endTime;
+    }
+    
+    scheduleAutoSave();
+}
+
 function setCellColor(color) {
     if (color === 'custom') {
         const customColorInput = document.getElementById('customColorPicker');
-        currentCellColor = customColorInput.value;
-        customCellColor = customColorInput.value;
+        const pickerValue = customColorInput.value || '#ffffff';
+        currentCellColor = pickerValue.toLowerCase();
+        customCellColor = pickerValue.toLowerCase();
+        const libraryValueInput = document.getElementById('libraryColorValue');
+        if (libraryValueInput) {
+            libraryValueInput.value = pickerValue;
+        }
+        const modal = document.getElementById('colorLibraryModal');
+        if (modal && !modal.classList.contains('hidden')) {
+            renderColorLibrary();
+        }
     } else {
         currentCellColor = color;
     }
@@ -1705,10 +1950,169 @@ function setCellColor(color) {
 }
 
 function setCustomCellColor(colorValue) {
-    customCellColor = colorValue;
+    if (!colorValue) {
+        return;
+    }
+    const normalizedValue = colorValue.toLowerCase();
+    customCellColor = normalizedValue;
     // Automatically select custom when the color picker changes
-    currentCellColor = colorValue;
+    currentCellColor = normalizedValue;
+    const libraryValueInput = document.getElementById('libraryColorValue');
+    if (libraryValueInput) {
+        libraryValueInput.value = normalizedValue;
+    }
     updateColorButtonSelection('custom');
+    const modal = document.getElementById('colorLibraryModal');
+    if (modal && !modal.classList.contains('hidden')) {
+        renderColorLibrary();
+    }
+}
+
+function openColorLibrary() {
+    const modal = document.getElementById('colorLibraryModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (!modal.dataset.bound) {
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeColorLibrary();
+            }
+        });
+        modal.dataset.bound = 'true';
+    }
+    const nameInput = document.getElementById('libraryColorName');
+    if (nameInput) {
+        nameInput.value = '';
+    }
+    const valueInput = document.getElementById('libraryColorValue');
+    if (valueInput) {
+        const customColorInput = document.getElementById('customColorPicker');
+        const fallback = customCellColor || '#ffffff';
+        valueInput.value = (customColorInput && customColorInput.value) ? customColorInput.value : fallback;
+    }
+    renderColorLibrary();
+}
+
+function closeColorLibrary() {
+    const modal = document.getElementById('colorLibraryModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function renderColorLibrary() {
+    const list = document.getElementById('colorLibraryList');
+    if (!list) {
+        return;
+    }
+    list.innerHTML = '';
+    if (!colorLibrary || colorLibrary.length === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'p-4 text-sm text-gray-500 bg-white border border-dashed border-gray-300 rounded';
+        emptyState.innerHTML = '<p class="font-medium text-gray-600 mb-1">No saved colours yet</p><p class="text-xs text-gray-500">Save a colour using the form above to reuse it later.</p>';
+        list.appendChild(emptyState);
+        return;
+    }
+    const activeColor = (customCellColor || '').toLowerCase();
+    colorLibrary.forEach(color => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between p-3 bg-white border border-gray-200 rounded hover:border-blue-400 transition-colors';
+        if (color.value === activeColor) {
+            item.classList.add('ring-2', 'ring-blue-200');
+        }
+        const infoWrapper = document.createElement('div');
+        infoWrapper.className = 'flex items-center space-x-3';
+        const swatch = document.createElement('div');
+        swatch.className = 'w-10 h-10 rounded border border-gray-300 shadow-inner';
+        swatch.style.backgroundColor = color.value;
+        const textWrapper = document.createElement('div');
+        const nameElem = document.createElement('p');
+        nameElem.className = 'text-sm font-medium text-gray-700';
+        nameElem.textContent = color.name;
+        const valueElem = document.createElement('p');
+        valueElem.className = 'text-xs text-gray-500 uppercase';
+        valueElem.textContent = color.value;
+        textWrapper.appendChild(nameElem);
+        textWrapper.appendChild(valueElem);
+        infoWrapper.appendChild(swatch);
+        infoWrapper.appendChild(textWrapper);
+        item.appendChild(infoWrapper);
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center space-x-2';
+        const applyBtn = document.createElement('button');
+        applyBtn.className = 'px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700';
+        applyBtn.textContent = 'Apply';
+        applyBtn.addEventListener('click', () => applyColorFromLibrary(color.id));
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'p-2 text-gray-400 hover:text-red-500';
+        deleteBtn.setAttribute('title', 'Delete colour');
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.addEventListener('click', () => deleteColorFromLibrary(color.id));
+        actions.appendChild(applyBtn);
+        actions.appendChild(deleteBtn);
+        item.appendChild(actions);
+        list.appendChild(item);
+    });
+}
+
+function saveColorToLibrary() {
+    const valueInput = document.getElementById('libraryColorValue');
+    if (!valueInput) {
+        return;
+    }
+    let colorValue = valueInput.value;
+    if (!colorValue || !/^#[0-9a-fA-F]{6}$/.test(colorValue)) {
+        alert('Please choose a valid colour to save.');
+        return;
+    }
+    colorValue = colorValue.toLowerCase();
+    const nameInput = document.getElementById('libraryColorName');
+    const colorName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : `Colour ${colorLibrary.length + 1}`;
+
+    const duplicate = colorLibrary.find(color => color.value === colorValue && color.name.toLowerCase() === colorName.toLowerCase());
+    if (duplicate) {
+        alert('This colour is already saved with the same name.');
+        return;
+    }
+
+    const newEntry = {
+        id: generateColorLibraryId(),
+        name: colorName,
+        value: colorValue
+    };
+    colorLibrary.push(newEntry);
+    persistColorLibrary();
+    renderColorLibrary();
+    if (nameInput) {
+        nameInput.value = '';
+    }
+}
+
+function applyColorFromLibrary(colorId) {
+    const colorEntry = colorLibrary.find(color => color.id === colorId);
+    if (!colorEntry) {
+        return;
+    }
+    const customColorInput = document.getElementById('customColorPicker');
+    if (customColorInput) {
+        customColorInput.value = colorEntry.value;
+    }
+    setCustomCellColor(colorEntry.value);
+    renderColorLibrary();
+}
+
+function deleteColorFromLibrary(colorId) {
+    const initialLength = colorLibrary.length;
+    colorLibrary = colorLibrary.filter(color => color.id !== colorId);
+    if (colorLibrary.length !== initialLength) {
+        persistColorLibrary();
+        renderColorLibrary();
+    }
 }
 
 function updateColorButtonSelection(selectedColor) {
@@ -1737,53 +2141,82 @@ function updateColorButtonSelection(selectedColor) {
 
 // Initialize enhanced features when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    loadStudyData();
-    loadNotes();
+    // Notes and study data are now loaded during timetable initialization
+    // loadStudyData();
+    // loadNotes();
 });
+
+// Formatting helper to ensure we always have a selection when applying styles
+function ensureSelectionForFormatting(editContent) {
+    const selection = window.getSelection();
+    let autoSelected = false;
+    
+    if (!selection || !editContent) {
+        return { selection: null, autoSelected };
+    }
+    
+    const hasRange = selection.rangeCount > 0;
+    const hasContentSelected = hasRange && selection.toString().length > 0;
+    
+    if (!hasRange || !hasContentSelected || selection.isCollapsed) {
+        const range = document.createRange();
+        range.selectNodeContents(editContent);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        autoSelected = true;
+    }
+    
+    return { selection, autoSelected };
+}
 
 // Formatting functions for edit modal
 function applyFormatting(command, value = null) {
     const editContent = document.getElementById('editModalContent');
+    if (!editContent) {
+        return;
+    }
+    
     editContent.focus();
+    let selectionInfo = { selection: null, autoSelected: false };
     
     if (command === 'fontFamily') {
+        selectionInfo = ensureSelectionForFormatting(editContent);
         document.execCommand('fontName', false, value);
     } else if (command === 'fontSize') {
-        // First select all content if nothing is selected
-        const selection = window.getSelection();
-        if (selection.rangeCount === 0 || selection.toString().length === 0) {
-            selection.selectAllChildren(editContent);
-        }
+        selectionInfo = ensureSelectionForFormatting(editContent);
+        const { selection, autoSelected } = selectionInfo;
         
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const span = document.createElement('span');
-            span.style.fontSize = value;
-            
-            try {
-                // If we have a selection, wrap it
-                if (selection.toString().length > 0) {
+        if (selection && selection.rangeCount > 0) {
+            if (autoSelected) {
+                // Apply to the entire content area
+                editContent.style.fontSize = value;
+            } else {
+                const range = selection.getRangeAt(0);
+                const span = document.createElement('span');
+                span.style.fontSize = value;
+                
+                try {
                     const contents = range.extractContents();
                     span.appendChild(contents);
                     range.insertNode(span);
-                } else {
-                    // Apply to all content
+                } catch (e) {
+                    console.error('Error applying font size:', e);
                     editContent.style.fontSize = value;
                 }
-            } catch (e) {
-                console.error('Error applying font size:', e);
-                editContent.style.fontSize = value;
             }
         }
-        
-        // Clear selection
-        selection.removeAllRanges();
     } else if (command === 'color') {
+        selectionInfo = ensureSelectionForFormatting(editContent);
         document.execCommand('foreColor', false, value);
     } else {
+        selectionInfo = ensureSelectionForFormatting(editContent);
         // For bold, italic, underline, strikethrough
         document.execCommand(command, false, null);
         updateFormattingButtons();
+    }
+    
+    if (selectionInfo.autoSelected && selectionInfo.selection) {
+        selectionInfo.selection.removeAllRanges();
     }
     
     editContent.focus();

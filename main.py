@@ -620,6 +620,7 @@ def spotify_disconnect():
 ### Timetable App ###
 #####################
 
+
 # Load environment variables
 load_dotenv()
 
@@ -663,6 +664,9 @@ class Timetable(db.Model):
     study_subjects = db.Column(db.Text, default='[]')  # JSON array of study subjects
     theme = db.Column(db.String(50), default='academic')  # Theme name
     revision_settings = db.Column(db.Text, default='{}')  # Revision specific settings
+    notes_data = db.Column(db.Text, default='{}')  # JSON object for notes (general, study, todos)
+    study_time_data = db.Column(db.Text, default='{}')  # JSON object for study time tracking
+    color_library = db.Column(db.Text, default='[]')  # JSON array of saved custom colors
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -671,8 +675,8 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # routes
-@app.route('/timetable')
-def timetable():
+@app.route('/')
+def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return render_template('login.html')
@@ -680,10 +684,6 @@ def timetable():
 @app.route('/login')
 def login():
     return render_template('login.html')
-
-@app.route('/manifest.json')
-def manifest():
-    return send_from_directory('static', 'manifest.json')
 
 @app.route('/auth/google', methods=['POST'])
 def google_auth():
@@ -774,7 +774,10 @@ def get_timetable(timetable_id):
         'time_slot_settings': json.loads(getattr(timetable, 'time_slot_settings', '{}') or '{}'),
         'study_subjects': json.loads(getattr(timetable, 'study_subjects', '[]') or '[]'),
         'theme': getattr(timetable, 'theme', 'academic'),
-        'revision_settings': json.loads(getattr(timetable, 'revision_settings', '{}') or '{}')
+        'revision_settings': json.loads(getattr(timetable, 'revision_settings', '{}') or '{}'),
+        'notes_data': json.loads(getattr(timetable, 'notes_data', '{}') or '{}'),
+        'study_time_data': json.loads(getattr(timetable, 'study_time_data', '{}') or '{}'),
+        'color_library': json.loads(getattr(timetable, 'color_library', '[]') or '[]')
     })
 
 @app.route('/api/timetable/<int:timetable_id>', methods=['PUT'])
@@ -803,6 +806,12 @@ def update_timetable(timetable_id):
         timetable.theme = data['theme']
     if 'revision_settings' in data:
         timetable.revision_settings = json.dumps(data['revision_settings'])
+    if 'notes_data' in data:
+        timetable.notes_data = json.dumps(data['notes_data'])
+    if 'study_time_data' in data:
+        timetable.study_time_data = json.dumps(data['study_time_data'])
+    if 'color_library' in data:
+        timetable.color_library = json.dumps(data['color_library'])
     
     timetable.updated_at = datetime.utcnow()
     db.session.commit()
@@ -827,17 +836,17 @@ def create_timetable():
             'danger': '#dc2626',       # Red
             'accent': '#0891b2',       # Cyan
             'background': '#f9fafb',   # Light gray
-            # Light gray header
-            },
-            'pastel': {
-                'primary': '#c4a1ff',      # Pastel Purple
-                'secondary': '#87ceeb',    # Pastel Blue
-                'success': '#98fb98',      # Pastel Green
-                'warning': '#ffb3ba',      # Pastel Pink
-                'danger': '#ffd1dc',       # Pastel Rose
-                'accent': '#dda0dd',       # Pastel Plum
-                'background': '#faf8ff',   # Very light lavender
-                'header': '#f0e6ff'        # Light pastel purple header
+            'header': '#f3f4f6'        # Light gray header
+        },
+        'pastel': {
+            'primary': '#8b5cf6',      # Soft Purple
+            'secondary': '#06b6d4',    # Soft Cyan
+            'success': '#10b981',      # Soft Green
+            'warning': '#f59e0b',      # Soft Yellow
+            'danger': '#f87171',       # Soft Pink
+            'accent': '#a78bfa',       # Light Purple
+            'background': '#fef7ff',   # Very light purple
+            'header': '#f5f3ff'        # Light purple header
         },
         'vibrant': {
             'primary': '#ec4899',      # Hot Pink
@@ -920,7 +929,17 @@ def create_timetable():
             'study_timer': True,
             'break_reminders': True,
             'difficulty_tracking': True
-        })
+        }),
+        notes_data=json.dumps({
+            'general': '',
+            'study': '',
+            'todos': []
+        }),
+        study_time_data=json.dumps({
+            'totalTimeAllTime': 0,
+            'lastSessionDate': None
+        }),
+        color_library=json.dumps([])
     )
     
     db.session.add(timetable)
