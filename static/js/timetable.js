@@ -103,6 +103,9 @@ let timetableData = {
 let saveTimeout = null;
 let currentEditCell = null;
 let isCustomizePanelOpen = false;
+let duplicateMode = false;
+let duplicateSourceKey = null;
+let duplicateKeyListenerRegistered = false;
 
 // Initialize the timetable
 async function initializeTimetable(id) {
@@ -118,10 +121,10 @@ async function initializeTimetable(id) {
             console.log('Loaded theme:', timetableData.theme);
             
             // Ensure backwards compatibility
-            if (!timetableData.time_slot_mode) {
+            if (typeof timetableData.time_slot_mode !== 'boolean') {
                 timetableData.time_slot_mode = true;
             }
-            if (!timetableData.time_slot_settings) {
+            if (!timetableData.time_slot_settings || typeof timetableData.time_slot_settings !== 'object') {
                 timetableData.time_slot_settings = {
                     start_time: '9:00',
                     slot_duration: 60,
@@ -306,25 +309,38 @@ function renderTimetable() {
             let cellDisplayContent = displayContent || '<span class="text-gray-400">Click to edit...</span>';
             
             // Add time information if available
-            if (cellData.startTime && cellData.endTime) {
+            if (timetableData.time_slot_mode && cellData.startTime && cellData.endTime) {
                 cellDisplayContent = `<div class="cell-time-display">${cellData.startTime} - ${cellData.endTime}</div>${cellDisplayContent}`;
-            } else if (cellData.startTime) {
+            } else if (timetableData.time_slot_mode && cellData.startTime) {
                 cellDisplayContent = `<div class="cell-time-display">${cellData.startTime}</div>${cellDisplayContent}`;
             }
             
+            td.dataset.cellKey = cellKey;
             td.innerHTML = `
-                <div class="cell-wrapper">
-                    <div class="cell-content-display" data-cell-key="${cellKey}" onclick="openCellEditModal('${cellKey}')" title="Click to edit">
+                <div class="cell-wrapper" data-cell-key="${cellKey}">
+                    <div class="cell-content-display" data-cell-key="${cellKey}" title="${duplicateMode ? 'Select a destination cell' : 'Click to edit'}">
                         ${cellDisplayContent}
                     </div>
                     <textarea class="cell-content-hidden" data-cell-key="${cellKey}" style="display: none;" onchange="updateCell('${cellKey}', this.value, '${cellData.color}')">${plainContent}</textarea>
-                    <button class="cell-edit-btn" onclick="openCellEditModal('${cellKey}')" title="Edit cell">
+                    <button class="cell-edit-btn" onclick="event.stopPropagation(); openCellEditModal('${cellKey}');" title="Edit cell">
                         <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <button class="cell-duplicate-btn" onclick="startDuplicateMode('${cellKey}', event)" title="Duplicate this cell">
+                        <i class="fas fa-clone"></i>
                     </button>
                 </div>
             `;
             td.addEventListener('contextmenu', (e) => showCellContextMenu(e, cellKey));
-            
+            td.addEventListener('click', (event) => handleCellClick(cellKey, event));
+            td.addEventListener('mouseenter', () => {
+                if (duplicateMode && duplicateSourceKey && cellKey !== duplicateSourceKey) {
+                    td.classList.add('duplicate-target-preview');
+                }
+            });
+            td.addEventListener('mouseleave', () => {
+                td.classList.remove('duplicate-target-preview');
+            });
+
             tr.appendChild(td);
         });
         
@@ -332,6 +348,7 @@ function renderTimetable() {
     });
     
     console.log('Timetable rendering complete!');
+    updateDuplicateUI();
 }
 
 // Update column header
@@ -375,8 +392,8 @@ function updateCellColor(cellKey, color) {
     }
     
     // Update the cell's appearance
-    const cellDisplay = document.querySelector(`.cell-content-display[onclick*="${cellKey}"]`);
-    const cellTextarea = document.querySelector(`textarea[onchange*="${cellKey}"]`);
+    const cellDisplay = document.querySelector(`.cell-content-display[data-cell-key="${cellKey}"]`);
+    const cellTextarea = document.querySelector(`textarea[data-cell-key="${cellKey}"]`);
     
     // Find the cell container (either from display or textarea)
     const cell = cellDisplay ? cellDisplay.closest('.timetable-cell') : cellTextarea?.closest('.timetable-cell');
@@ -576,8 +593,8 @@ function hideContextMenu() {
 function clearCell(cellKey) {
     updateCell(cellKey, '', 'default');
     
-    const cellDisplay = document.querySelector(`.cell-content-display[onclick*="${cellKey}"]`);
-    const cellTextarea = document.querySelector(`textarea[onchange*="${cellKey}"]`);
+    const cellDisplay = document.querySelector(`.cell-content-display[data-cell-key="${cellKey}"]`);
+    const cellTextarea = document.querySelector(`textarea[data-cell-key="${cellKey}"]`);
     const cell = cellDisplay ? cellDisplay.closest('.timetable-cell') : cellTextarea?.closest('.timetable-cell');
     
     if (cellDisplay) {
@@ -590,6 +607,161 @@ function clearCell(cellKey) {
         cell.className = cell.className.replace(/cell-(default|primary|secondary|success|warning|danger|custom)/g, '') + ' cell-default';
         cell.style.backgroundColor = '';
     }
+}
+
+function startDuplicateMode(cellKey, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (duplicateMode && duplicateSourceKey === cellKey) {
+        cancelDuplicateMode();
+        return;
+    }
+    duplicateMode = true;
+    duplicateSourceKey = cellKey;
+    updateDuplicateUI();
+    ensureDuplicateKeyListener();
+}
+
+function handleCellClick(cellKey, event) {
+    if (event) {
+        const button = event.target.closest('button');
+        if (button && (button.classList.contains('cell-edit-btn') || button.classList.contains('cell-duplicate-btn'))) {
+            return;
+        }
+    }
+
+    if (duplicateMode) {
+        if (cellKey === duplicateSourceKey) {
+            return;
+        }
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        performCellDuplicate(cellKey);
+        return;
+    }
+
+    openCellEditModal(cellKey);
+}
+
+function performCellDuplicate(targetKey) {
+    if (!duplicateSourceKey) {
+        return;
+    }
+    if (targetKey === duplicateSourceKey) {
+        return;
+    }
+
+    const sourceData = timetableData.cells_data[duplicateSourceKey];
+    const targetData = sourceData ? JSON.parse(JSON.stringify(sourceData)) : { content: '', color: 'default' };
+    timetableData.cells_data[targetKey] = targetData;
+    
+    duplicateMode = false;
+    const sourceKey = duplicateSourceKey;
+    duplicateSourceKey = null;
+    unregisterDuplicateKeyListener();
+    
+    renderTimetable();
+    scheduleAutoSave();
+    
+    requestAnimationFrame(() => flashDuplicatedCell(targetKey));
+    console.log(`Duplicated cell data from ${sourceKey} to ${targetKey}`);
+}
+
+function cancelDuplicateMode() {
+    duplicateMode = false;
+    duplicateSourceKey = null;
+    unregisterDuplicateKeyListener();
+    updateDuplicateUI();
+}
+
+function ensureDuplicateKeyListener() {
+    if (!duplicateKeyListenerRegistered) {
+        document.addEventListener('keydown', handleDuplicateKeydown);
+        duplicateKeyListenerRegistered = true;
+    }
+}
+
+function unregisterDuplicateKeyListener() {
+    if (duplicateKeyListenerRegistered) {
+        document.removeEventListener('keydown', handleDuplicateKeydown);
+        duplicateKeyListenerRegistered = false;
+    }
+}
+
+function handleDuplicateKeydown(event) {
+    if (event.key === 'Escape' && duplicateMode) {
+        cancelDuplicateMode();
+    }
+}
+
+function updateDuplicateUI() {
+    const banner = document.getElementById('duplicateModeBanner');
+    const statusElement = document.getElementById('duplicateModeStatus');
+    const cancelButton = document.getElementById('duplicateCancelButton');
+
+    if (cancelButton && !cancelButton.dataset.listenerAttached) {
+        cancelButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            cancelDuplicateMode();
+        });
+        cancelButton.dataset.listenerAttached = 'true';
+    }
+
+    if (document.body) {
+        document.body.classList.toggle('duplicate-mode-active', duplicateMode);
+    }
+
+    document.querySelectorAll('.duplicate-source').forEach(el => el.classList.remove('duplicate-source'));
+    document.querySelectorAll('.duplicate-target-preview').forEach(el => el.classList.remove('duplicate-target-preview'));
+
+    if (duplicateMode && duplicateSourceKey) {
+        const sourceCell = document.querySelector(`td[data-cell-key="${duplicateSourceKey}"]`);
+        if (sourceCell) {
+            sourceCell.classList.add('duplicate-source');
+        }
+        if (banner) {
+            banner.classList.remove('hidden');
+        }
+        if (statusElement) {
+            statusElement.textContent = `Duplicating from ${getCellLabel(duplicateSourceKey)}. Click a destination cell to copy.`;
+        }
+    } else {
+        if (banner) {
+            banner.classList.add('hidden');
+        }
+        if (statusElement) {
+            statusElement.textContent = '';
+        }
+    }
+
+    document.querySelectorAll('.cell-content-display').forEach(display => {
+        const key = display.dataset.cellKey;
+        if (duplicateMode && duplicateSourceKey) {
+            display.title = key === duplicateSourceKey ? 'Selected for duplication' : 'Click to select as destination';
+        } else {
+            display.title = 'Click to edit';
+        }
+    });
+}
+
+function getCellLabel(cellKey) {
+    const [rowIndex, colIndex] = cellKey.split('-').map(Number);
+    const rowLabel = timetableData.row_headers[rowIndex] || `Time Slot ${rowIndex + 1}`;
+    const colLabel = timetableData.column_headers[colIndex] || `Day ${colIndex + 1}`;
+    return `${colLabel} — ${rowLabel}`;
+}
+
+function flashDuplicatedCell(cellKey) {
+    const cell = document.querySelector(`td[data-cell-key="${cellKey}"]`);
+    if (!cell) {
+        return;
+    }
+    cell.classList.add('duplicate-target-applied');
+    setTimeout(() => cell.classList.remove('duplicate-target-applied'), 1200);
 }
 
 // Study Timer Functions
@@ -799,7 +971,7 @@ function toggleCellCompletion(cellKey, completed) {
     timetableData.cells_data[cellKey].completed = completed;
     
     // Update visual state
-    const textarea = document.querySelector(`textarea[onchange*="${cellKey}"]`);
+    const textarea = document.querySelector(`textarea[data-cell-key="${cellKey}"]`);
     if (textarea) {
         if (completed) {
             textarea.classList.add('completed');
@@ -1330,7 +1502,7 @@ function updateTimeSlotUI() {
         }
     }
     
-    const settings = timetableData.time_slot_settings;
+    const settings = timetableData.time_slot_settings || {};
     if (startTimeInput && settings.start_time) startTimeInput.value = settings.start_time;
     if (slotDurationInput && settings.slot_duration) slotDurationInput.value = settings.slot_duration;
     if (breakDurationInput && settings.break_duration !== undefined) breakDurationInput.value = settings.break_duration;
@@ -1357,7 +1529,7 @@ function updateTimeSlotUI() {
 }
 
 function generateTimeSlots() {
-    const settings = timetableData.time_slot_settings;
+    const settings = timetableData.time_slot_settings || {};
     const startTime = settings.start_time || '9:00';
     const slotDuration = settings.slot_duration || 60;
     const breakDuration = settings.break_duration || 15;

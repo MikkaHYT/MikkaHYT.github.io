@@ -620,6 +620,19 @@ def spotify_disconnect():
 ### Timetable App ###
 #####################
 
+# imports
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+import json
+import os
+import re
+import uuid
+from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -632,6 +645,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Database setup
 db = SQLAlchemy(app)
+
+GEMINI_LOG_DIR = Path(app.instance_path) / 'gemini_logs'
+GEMINI_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Login manager setup
 login_manager = LoginManager()
@@ -670,16 +686,234 @@ class Timetable(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+DAY_ORDER = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+]
+
+DAY_ALIASES = {
+    'mon': 'Monday', 'monday': 'Monday',
+    'tue': 'Tuesday', 'tues': 'Tuesday', 'tuesday': 'Tuesday',
+    'wed': 'Wednesday', 'weds': 'Wednesday', 'wednesday': 'Wednesday',
+    'thu': 'Thursday', 'thur': 'Thursday', 'thurs': 'Thursday', 'thursday': 'Thursday',
+    'fri': 'Friday', 'friday': 'Friday',
+    'sat': 'Saturday', 'saturday': 'Saturday',
+    'sun': 'Sunday', 'sunday': 'Sunday'
+}
+
+
+def normalize_day_name(day_raw: str) -> str | None:
+    if not day_raw:
+        return None
+    cleaned = day_raw.strip().lower().replace('.', '')
+    if not cleaned:
+        return None
+    return DAY_ALIASES.get(cleaned, day_raw.strip().title())
+
+
+def normalize_time_string(time_raw: str) -> str | None:
+    if not time_raw:
+        return None
+    cleaned = time_raw.strip().lower().replace(' ', '').replace('.', '')
+    if not cleaned:
+        return None
+
+    match = re.match(r'^(?P<hour>\d{1,2}):(?P<minute>\d{2})(?P<period>am|pm)?$', cleaned)
+    if match:
+        hour = int(match.group('hour'))
+        minute = int(match.group('minute'))
+        period = match.group('period')
+        if period:
+            hour = hour % 12
+            if period == 'pm':
+                hour += 12
+        if 0 <= hour < 24 and 0 <= minute < 60:
+            return f"{hour:02d}:{minute:02d}"
+
+    match = re.match(r'^(?P<hour>\d{1,2})(?P<period>am|pm)$', cleaned)
+    if match:
+        hour = int(match.group('hour')) % 12
+        if match.group('period') == 'pm':
+            hour += 12
+        return f"{hour:02d}:00"
+
+    match = re.match(r'^(?P<hour>\d{1,2})(?P<minute>\d{2})$', cleaned)
+    if match:
+        hour = int(match.group('hour'))
+        minute = int(match.group('minute'))
+        if 0 <= hour < 24 and 0 <= minute < 60:
+            return f"{hour:02d}:{minute:02d}"
+
+    return None
+
+
+def time_to_minutes(time_str: str) -> int:
+    hour, minute = map(int, time_str.split(':'))
+    return hour * 60 + minute
+
+
+def build_row_label(start_time: str, end_time: str) -> str:
+    return f"{start_time} - {end_time}"
+
+
+def _safe_strip(value: object | None) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def normalize_date_string(date_raw: object | None) -> str | None:
+    if date_raw is None:
+        return None
+    cleaned = str(date_raw).strip()
+    if not cleaned:
+        return None
+
+    candidates = {
+        cleaned,
+        cleaned.replace('.', '/'),
+        cleaned.replace('-', '/')
+    }
+
+    for candidate in candidates:
+        for date_format in ('%Y-%m-%d', '%d/%m/%Y', '%d/%m/%y', '%d-%m-%Y', '%d-%m-%y'):
+            try:
+                parsed = datetime.strptime(candidate, date_format)
+                return parsed.strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+
+    return None
+
+
+def gemini_prompt_template() -> str:
+    return (
+        "You are an assistant that extracts timetable information from an image. "
+        "Respond strictly in JSON using the following schema: {\n"
+        "  \"timetable_name\": string (optional),\n"
+        "  \"lessons\": [\n"
+        "    {\n"
+        "      \"day\": string (e.g. Monday),\n"
+        "      \"subject\": string,\n"
+        "      \"start_time\": string in 24h format (HH:MM),\n"
+        "      \"end_time\": string in 24h format (HH:MM),\n"
+        "      \"location\": string (optional),\n"
+        "      \"notes\": string (optional),\n"
+        "      \"start_date\": string in ISO format YYYY-MM-DD (optional),\n"
+        "      \"end_date\": string in ISO format YYYY-MM-DD (optional)\n"
+        "    }\n"
+        "  ]\n"
+        "}.\n"
+        "Always ensure start_time and end_time are in 24h format. "
+        "If any value is unknown or unreadable, set that JSON field to null rather than omitting it. "
+        "Do not include any additional commentary."
+        "If there is a From and To column with dates, ignore them and don't append them to anything, also the same with the room / staff columns, also ignore codes in the subject names."
+    )
+
+
+def gemini_retry_prompt_template() -> str:
+    return (
+        "You previously saw a timetable image but did not extract any rows. "
+        "Look carefully at every row and include each class you can read. "
+        "Return the exact same JSON schema as before. If a value is unclear, set it to null rather than skipping the row. "
+        "Do not add commentary or Markdown fences—output pure JSON only."
+    )
+
+
+DEFAULT_COLOR_SCHEME = {
+    'primary': '#2563eb',
+    'secondary': '#7c3aed',
+    'success': '#059669',
+    'warning': '#d97706',
+    'danger': '#dc2626',
+    'accent': '#0891b2',
+    'background': '#f9fafb',
+    'header': '#f3f4f6'
+}
+
+
+def _persist_gemini_log(entry: dict) -> str:
+    """Persist Gemini interaction details for debugging and return a log identifier."""
+    try:
+        GEMINI_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_id = f"{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        log_path = GEMINI_LOG_DIR / f"{log_id}.json"
+        log_path.write_text(json.dumps(entry, indent=2), encoding='utf-8')
+        return log_id
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception('Failed to persist Gemini log: %s', exc)
+        return ''
+
+
+def extract_json_from_text(raw_text: str) -> tuple[dict | list | None, str | None]:
+    """Attempt to parse JSON from Gemini output, returning (payload, error_message)."""
+    cleaned = raw_text.strip()
+    if cleaned.startswith('```'):
+        cleaned = cleaned.strip('`')
+        cleaned = cleaned.replace('json', '', 1).strip()
+
+    # Normalize smart quotes to avoid JSON parsing issues
+    cleaned = cleaned.replace('\u2018', "'").replace('\u2019', "'")
+    cleaned = cleaned.replace('\u201c', '"').replace('\u201d', '"')
+
+    try:
+        return json.loads(cleaned), None
+    except json.JSONDecodeError as err:
+        first_brace = cleaned.find('{')
+        last_brace = cleaned.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            candidate = cleaned[first_brace:last_brace + 1]
+            try:
+                return json.loads(candidate), None
+            except json.JSONDecodeError as inner_err:
+                auto_closed = _close_json_braces(candidate)
+                try:
+                    return json.loads(auto_closed), None
+                except json.JSONDecodeError as final_err:
+                    return None, f"Failed to parse JSON snippet: {final_err.msg}"
+        auto_closed = _close_json_braces(cleaned)
+        try:
+            return json.loads(auto_closed), None
+        except json.JSONDecodeError as final_err:
+            return None, f"Failed to parse JSON: {final_err.msg}"
+
+
+def _close_json_braces(payload: str) -> str:
+    """Best-effort attempt to append missing closing braces/brackets."""
+    stack: list[str] = []
+    result_chars: list[str] = []
+    in_string = False
+    escape_next = False
+
+    for ch in payload:
+        result_chars.append(ch)
+        if escape_next:
+            escape_next = False
+            continue
+
+        if ch == '\\':
+            escape_next = True
+            continue
+
+        if ch == '"':
+            in_string = not in_string
+            continue
+
+        if in_string:
+            continue
+
+        if ch in '{[':
+            stack.append(ch)
+        elif ch in '}]':
+            if stack and ((stack[-1] == '{' and ch == '}') or (stack[-1] == '[' and ch == ']')):
+                stack.pop()
+
+    closing = ''.join('}' if ch == '{' else ']' for ch in reversed(stack))
+    return ''.join(result_chars) + closing
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-# routes
-@app.route('/timetable')
-def timetableindex():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    return render_template('login.html')
 
 @app.route('/login')
 def login():
@@ -954,6 +1188,411 @@ def delete_timetable(timetable_id):
     db.session.delete(timetable)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@app.route('/api/timetable/import-ai', methods=['POST'])
+@login_required
+def import_timetable_ai():
+    if 'timetableImage' not in request.files:
+        return jsonify({'success': False, 'error': 'Please upload an image of your timetable.'}), 400
+
+    uploaded_file = request.files['timetableImage']
+    if uploaded_file.filename == '':
+        return jsonify({'success': False, 'error': 'Please choose an image file before submitting.'}), 400
+
+    image_bytes = uploaded_file.read()
+    if not image_bytes:
+        return jsonify({'success': False, 'error': 'Uploaded file appears to be empty.'}), 400
+
+    mime_type = uploaded_file.mimetype or 'image/png'
+    api_key = os.getenv('GEMINI_API_KEY')
+
+    if not api_key:
+        return jsonify({
+            'success': False,
+            'error': 'AI import is not configured on this server yet. Please contact the administrator.'
+        }), 500
+
+    try:
+        import google.generativeai as genai  # type: ignore[import-not-found]
+    except ImportError:
+        app.logger.exception('google-generativeai package is not installed. Cannot run AI import.')
+        return jsonify({
+            'success': False,
+            'error': 'AI import dependency missing on the server. Please install google-generativeai.'
+        }), 500
+
+    log_entry: dict[str, object] = {
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'user_id': current_user.id,
+        'filename': uploaded_file.filename,
+        'mime_type': mime_type
+    }
+
+    try:
+        genai.configure(api_key=api_key)
+        generation_config = {
+            'temperature': 0.2,
+            'top_p': 0.8,
+            'max_output_tokens': 5048
+
+        }
+        model_name = 'gemini-flash-latest'
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=generation_config
+        )
+        log_entry.update({
+            'model': model_name,
+            'generation_config': generation_config,
+            'image_bytes_length': len(image_bytes)
+        })
+        attempt_prompts = [
+            {'label': 'primary', 'text': gemini_prompt_template()},
+            {'label': 'retry', 'text': gemini_retry_prompt_template()}
+        ]
+        candidate_texts: list[str] = []
+        safety_blocked = False
+        blocked_categories: set[str] = set()
+        last_prompt_blocked = False
+        last_prompt_categories: set[str] = set()
+        log_entry['attempts'] = []
+
+        for attempt_index, prompt_cfg in enumerate(attempt_prompts, start=1):
+            attempt_log: dict[str, object] = {
+                'attempt': attempt_index,
+                'label': prompt_cfg['label']
+            }
+
+            response = model.generate_content([
+                {'mime_type': mime_type, 'data': image_bytes},
+                {'text': prompt_cfg['text']}
+            ])
+
+            attempt_texts: list[str] = []
+            attempt_safety_blocked = False
+            attempt_blocked_categories: set[str] = set()
+
+            for candidate in getattr(response, 'candidates', []):
+                finish_reason = getattr(candidate, 'finish_reason', None)
+                if hasattr(finish_reason, 'name'):
+                    finish_code = finish_reason.name.upper()
+                elif isinstance(finish_reason, str):
+                    finish_code = finish_reason.upper()
+                else:
+                    finish_code = str(finish_reason or '').upper()
+
+                if finish_code == 'SAFETY':
+                    attempt_safety_blocked = True
+                for rating in getattr(candidate, 'safety_ratings', []) or []:
+                    if getattr(rating, 'blocked', False):
+                        attempt_safety_blocked = True
+                        attempt_blocked_categories.add(getattr(rating, 'category', 'unknown'))
+
+                parts = getattr(getattr(candidate, 'content', None), 'parts', []) or []
+                for part in parts:
+                    text_part = getattr(part, 'text', None)
+                    if text_part:
+                        attempt_texts.append(text_part)
+
+            attempt_log['candidate_text_count'] = len(attempt_texts)
+            attempt_log['safety_blocked'] = attempt_safety_blocked
+            if attempt_blocked_categories:
+                attempt_log['blocked_categories'] = sorted(attempt_blocked_categories)
+
+            prompt_feedback = getattr(response, 'prompt_feedback', None)
+            prompt_blocked = False
+            prompt_categories: set[str] = set()
+            if prompt_feedback and getattr(prompt_feedback, 'block_reason', None):
+                prompt_blocked = True
+                prompt_categories.add(str(getattr(prompt_feedback, 'block_reason')))
+            for rating in getattr(prompt_feedback, 'safety_ratings', []) or []:
+                if getattr(rating, 'blocked', False):
+                    prompt_blocked = True
+                    prompt_categories.add(getattr(rating, 'category', 'unknown'))
+
+            attempt_log['prompt_blocked'] = prompt_blocked
+            if prompt_categories:
+                attempt_log['prompt_categories'] = sorted(prompt_categories)
+
+            log_entry['attempts'].append(attempt_log)
+
+            if attempt_texts:
+                candidate_texts = attempt_texts
+                safety_blocked = attempt_safety_blocked
+                blocked_categories = attempt_blocked_categories
+                break
+
+            if attempt_safety_blocked:
+                safety_blocked = True
+                blocked_categories = attempt_blocked_categories
+                log_entry.update({
+                    'status': 'safety_blocked',
+                    'message': 'Blocked by safety filters.',
+                    'failed_attempt': attempt_index
+                })
+                log_id = _persist_gemini_log(log_entry)
+                app.logger.warning(
+                    'Gemini import blocked by safety filters. Categories: %s',
+                    ', '.join(sorted(attempt_blocked_categories)) or 'unspecified'
+                )
+                return jsonify({
+                    'success': False,
+                    'error': 'The AI blocked this image due to safety filters. Try a clearer screenshot without personal info.',
+                    'log_id': log_id or None
+                }), 422
+
+            last_prompt_blocked = prompt_blocked
+            last_prompt_categories = prompt_categories
+
+            if attempt_index < len(attempt_prompts):
+                continue
+
+        log_entry['candidate_texts'] = candidate_texts
+        log_entry['response_has_candidates'] = bool(candidate_texts)
+        log_entry['safety_blocked'] = safety_blocked
+        log_entry['attempt_count'] = len(log_entry.get('attempts', []))
+        if blocked_categories:
+            log_entry['blocked_categories'] = sorted(blocked_categories)
+
+        if not candidate_texts:
+            log_entry.update({
+                'status': 'no_candidates',
+                'prompt_blocked': last_prompt_blocked,
+                'prompt_categories': sorted(last_prompt_categories)
+            })
+            log_id = _persist_gemini_log(log_entry)
+            app.logger.warning(
+                'Gemini import produced no textual candidates. Prompt blocked: %s Categories: %s',
+                last_prompt_blocked,
+                ', '.join(sorted(last_prompt_categories)) or 'none'
+            )
+            return jsonify({
+                'success': False,
+                'error': 'The AI could not read anything useful from that image after two attempts. Try retaking the screenshot with clearer text.',
+                'log_id': log_id or None
+            }), 422
+
+        payload_text = ''.join(candidate_texts).strip()
+        ai_payload, parse_error = extract_json_from_text(payload_text)
+        if ai_payload is None:
+            log_entry.update({
+                'status': 'parse_failed',
+                'payload_text': payload_text,
+                'parse_error': parse_error
+            })
+            log_id = _persist_gemini_log(log_entry)
+            app.logger.warning(
+                'Gemini import produced unparsable payload. Error: %s Payload sample: %s',
+                parse_error or 'unknown',
+                payload_text[:500]
+            )
+            return jsonify({
+                'success': False,
+                'error': 'The AI returned an unexpected format. Please try again with a clearer timetable image.',
+                'log_id': log_id or None
+            }), 502
+        lessons_raw: list[dict] = []
+        if isinstance(ai_payload, list):
+            lessons_raw = [item for item in ai_payload if isinstance(item, dict)]
+            ai_payload = {'lessons': lessons_raw}
+        elif isinstance(ai_payload, dict):
+            candidate_lessons = ai_payload.get('lessons')
+            if isinstance(candidate_lessons, list):
+                lessons_raw = [item for item in candidate_lessons if isinstance(item, dict)]
+            else:
+                for alt_key in ('schedule', 'entries', 'courses'):
+                    alt_value = ai_payload.get(alt_key)
+                    if isinstance(alt_value, list):
+                        lessons_raw = [item for item in alt_value if isinstance(item, dict)]
+                        ai_payload['lessons'] = lessons_raw
+                        break
+        else:
+            ai_payload = {'lessons': []}
+
+        lessons = lessons_raw
+    except Exception as exc:  # noqa: BLE001
+        log_entry.update({
+            'status': 'exception',
+            'error': str(exc)
+        })
+        _persist_gemini_log(log_entry)
+        app.logger.exception('Gemini timetable import failed: %s', exc)
+        return jsonify({
+            'success': False,
+            'error': 'Unable to process the timetable image right now. Please try again later.'
+        }), 500
+
+    parsed_lessons = []
+    for lesson in lessons:
+        day = normalize_day_name(_safe_strip(lesson.get('day')) or _safe_strip(lesson.get('weekday')))
+        start_time = normalize_time_string(_safe_strip(lesson.get('start_time')) or _safe_strip(lesson.get('start')))
+        end_time = normalize_time_string(_safe_strip(lesson.get('end_time')) or _safe_strip(lesson.get('end')))
+        subject = _safe_strip(lesson.get('subject')) or _safe_strip(lesson.get('course')) or 'Lesson'
+        location = _safe_strip(lesson.get('location')) or _safe_strip(lesson.get('room'))
+        staff = _safe_strip(lesson.get('staff')) or _safe_strip(lesson.get('teacher'))
+        start_date = normalize_date_string(lesson.get('start_date') or lesson.get('from_date'))
+        end_date = normalize_date_string(lesson.get('end_date') or lesson.get('to_date'))
+        base_notes = _safe_strip(lesson.get('notes'))
+
+        if not day or not start_time or not end_time:
+            continue
+
+        start_minutes = time_to_minutes(start_time)
+        end_minutes = time_to_minutes(end_time)
+        if end_minutes <= start_minutes:
+            continue
+
+        notes_lines: list[str] = []
+        if start_date and end_date:
+            notes_lines.append(f"Dates: {start_date} → {end_date}")
+        elif start_date:
+            notes_lines.append(f"Starts: {start_date}")
+        elif end_date:
+            notes_lines.append(f"Ends: {end_date}")
+
+        if base_notes:
+            notes_lines.append(base_notes)
+
+        notes_text = '\n'.join(notes_lines) if notes_lines else None
+
+        parsed_lessons.append({
+            'day': day,
+            'start_time': start_time,
+            'end_time': end_time,
+            'subject': subject,
+            'location': location,
+            'notes': notes_text,
+            'staff': staff,
+            'start_date': start_date,
+            'end_date': end_date,
+            'duration': end_minutes - start_minutes
+        })
+
+    if not parsed_lessons:
+        log_entry.update({
+            'status': 'no_valid_lessons',
+            'payload_text': payload_text,
+            'parsed_lessons': []
+        })
+        log_id = _persist_gemini_log(log_entry)
+        return jsonify({
+            'success': False,
+            'error': 'The AI could not detect any valid lessons in the uploaded timetable. Try a clearer image.',
+            'log_id': log_id or None
+        }), 422
+
+    unique_days = {}
+    for lesson in parsed_lessons:
+        if lesson['day'] not in unique_days:
+            unique_days[lesson['day']] = None
+
+    ordered_days = sorted(
+        unique_days.keys(),
+        key=lambda d: DAY_ORDER.index(d) if d in DAY_ORDER else len(DAY_ORDER)
+    )
+
+    day_index_map = {day: idx for idx, day in enumerate(ordered_days)}
+
+    row_map: dict[str, dict[str, str | int]] = {}
+    for lesson in parsed_lessons:
+        label = build_row_label(lesson['start_time'], lesson['end_time'])
+        if label not in row_map:
+            row_map[label] = {
+                'label': label,
+                'start': lesson['start_time'],
+                'end': lesson['end_time'],
+                'duration': lesson['duration']
+            }
+
+    ordered_rows = sorted(row_map.values(), key=lambda r: time_to_minutes(r['start']))
+    row_index_map = {row['label']: idx for idx, row in enumerate(ordered_rows)}
+
+    cells_data = {}
+    subjects = set()
+
+    for lesson in parsed_lessons:
+        row_idx = row_index_map[build_row_label(lesson['start_time'], lesson['end_time'])]
+        col_idx = day_index_map[lesson['day']]
+        cell_key = f"{row_idx}-{col_idx}"
+
+        subjects.add(lesson['subject'])
+
+        lines = [lesson['subject']]
+        if lesson['location']:
+            lines.append(f"Room: {lesson['location']}")
+        if lesson.get('staff'):
+            lines.append(f"Staff: {lesson['staff']}")
+        if lesson['notes']:
+            lines.extend([segment for segment in lesson['notes'].split('\n') if segment])
+
+        entry_text = '\n'.join(filter(None, lines))
+
+        if cell_key in cells_data:
+            existing = cells_data[cell_key]
+            combined = [existing.get('content', '').strip(), entry_text.strip()]
+            existing['content'] = '\n\n'.join([part for part in combined if part])
+            subject_parts = [existing.get('subject'), lesson['subject']]
+            existing['subject'] = ' / '.join([part for part in subject_parts if part])
+        else:
+            cells_data[cell_key] = {
+                'content': entry_text,
+                'color': 'primary',
+                'subject': lesson['subject'],
+                'priority': 'medium',
+                'completed': False
+            }
+
+    timetable = Timetable(
+        user_id=current_user.id,
+        name=ai_payload.get('timetable_name') or 'AI Imported Timetable',
+        row_headers=json.dumps([row['label'] for row in ordered_rows]),
+        column_headers=json.dumps(ordered_days),
+        cells_data=json.dumps(cells_data),
+        color_scheme=json.dumps(DEFAULT_COLOR_SCHEME),
+        time_slot_mode=False,
+        time_slot_settings=json.dumps({}),
+        study_subjects=json.dumps(sorted(subjects)),
+        theme='academic',
+        revision_settings=json.dumps({
+            'show_progress': True,
+            'auto_color_subjects': True,
+            'study_timer': True,
+            'break_reminders': True,
+            'difficulty_tracking': True
+        }),
+        notes_data=json.dumps({
+            'general': '',
+            'study': '',
+            'todos': []
+        }),
+        study_time_data=json.dumps({
+            'totalTimeAllTime': 0,
+            'lastSessionDate': None
+        }),
+        color_library=json.dumps([])
+    )
+
+    db.session.add(timetable)
+    db.session.commit()
+
+    log_entry.update({
+        'status': 'success',
+        'payload_text': payload_text,
+        'parsed_lessons': parsed_lessons,
+        'timetable_id': timetable.id,
+        'ordered_days': ordered_days,
+        'row_headers': [row['label'] for row in ordered_rows],
+        'attempt_count': len(log_entry.get('attempts', []))
+    })
+    log_id = _persist_gemini_log(log_entry)
+
+    return jsonify({
+        'success': True,
+        'id': timetable.id,
+        'name': timetable.name,
+        'log_id': log_id or None
+    })
 
 @app.route('/logout')
 @login_required
@@ -2365,4 +3004,4 @@ def read_custom_words():
         return []
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, host='0.0.0.0', port=8080, debug=True)

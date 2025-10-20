@@ -6,7 +6,6 @@
     <title>Dashboard - Timetable App</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="manifest" href="/manifest.json">
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Navigation -->
@@ -39,10 +38,21 @@
                     <h2 class="text-3xl font-bold text-gray-900">Your Timetables</h2>
                     <p class="text-gray-600 mt-2">Create and manage your personalized timetables</p>
                 </div>
-                <button onclick="createNewTimetable()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
-                    <i class="fas fa-plus"></i>
-                    <span>New Timetable</span>
-                </button>
+                <div class="flex items-center space-x-3">
+                    <button onclick="openImportAiModal()" class="relative overflow-hidden px-4 py-2 rounded-lg flex items-center space-x-2 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white shadow-lg hover:shadow-xl transition transform hover:-translate-y-0.5">
+                        <span class="absolute inset-0 opacity-50 bg-[radial-gradient(circle_at_top_left,_#ffffff33,_transparent_60%)]"></span>
+                        <i class="fas fa-wand-magic-sparkles relative z-10"></i>
+                        <span class="relative z-10 font-semibold tracking-wide">Import with AI</span>
+                        <span class="relative z-10 flex items-center space-x-1 text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                            <i class="fas fa-star text-yellow-200"></i>
+                            <span>Beta</span>
+                        </span>
+                    </button>
+                    <button onclick="createNewTimetable()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-plus"></i>
+                        <span>New Timetable</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Timetables Grid -->
@@ -194,11 +204,68 @@
         </div>
     </div>
 
+    <!-- Import with AI Modal -->
+    <div id="importAiModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
+            <div class="flex items-start justify-between border-b pb-4 mb-4 px-6 pt-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800">Import Timetable with AI</h3>
+                    <p class="text-sm text-gray-500">Upload a clear timetable screenshot and well convert it into an editable schedule.</p>
+                </div>
+                <button onclick="closeImportAiModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="px-6 pb-6 space-y-6">
+                <div class="p-4 border border-dashed border-gray-300 rounded-md bg-gray-50">
+                    <div class="flex items-start space-x-4">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                            <i class="fas fa-upload"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-base font-semibold text-gray-800">Upload a timetable screenshot</h4>
+                            <p class="text-sm text-gray-500">Accepted formats: JPG, PNG, HEIC. Make sure the grid and lesson text are easy to read.</p>
+                        </div>
+                    </div>
+                </div>
+                <form id="importAiForm" class="space-y-5" enctype="multipart/form-data">
+                    <div class="border-2 border-dashed border-gray-300 rounded-md bg-white p-6 text-center hover:border-blue-400 transition">
+                        <input type="file" id="timetableImage" name="timetableImage" accept="image/*" class="hidden" required>
+                        <label for="timetableImage" class="cursor-pointer">
+                            <div class="flex flex-col items-center space-y-3">
+                                <span class="text-xs font-semibold uppercase tracking-widest text-blue-600 bg-blue-100 px-3 py-1 rounded-full">Step 1</span>
+                                <span class="text-lg font-semibold text-gray-700">Drag & drop or click to upload</span>
+                                <span class="text-sm text-gray-500">We'll extract lesson names, days, and times automatically.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="bg-white rounded-md border border-gray-200 p-4">
+                        <span class="text-xs font-semibold uppercase tracking-widest text-blue-600 bg-blue-100 px-3 py-1 rounded-full">Step 2</span>
+                        <ul class="mt-3 text-sm text-gray-600 space-y-2">
+                            <li><i class="fas fa-check text-green-500 mr-2"></i>Google Gemini reads the timetable image.</li>
+                            <li><i class="fas fa-check text-green-500 mr-2"></i>We build a structured timetable for you.</li>
+                            <li><i class="fas fa-check text-green-500 mr-2"></i>You can fine-tune every detail afterwards.</li>
+                        </ul>
+                    </div>
+                    <div id="importAiStatus" class="hidden bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-md px-4 py-3"></div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeImportAiModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center space-x-2">
+                            <i class="fas fa-sparkles"></i>
+                            <span>Create Timetable</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentTimetableId = null;
         let isEditing = false;
         let selectedTheme = 'academic';
         let studySubjects = ['Mathematics', 'Science', 'English', 'History'];
+        let isImportingAi = false;
 
         function createNewTimetable() {
             document.getElementById('modalTitle').textContent = 'Create New Revision Timetable';
@@ -238,43 +305,6 @@
             // Show theme selection again
             document.querySelector('.mb-6').style.display = 'block';
         }
-
-        let deferredPrompt;
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-        // Prevent the default browser mini-infobar from appearing
-        e.preventDefault();
-        // Save the event for later use
-        deferredPrompt = e;
-        // Show your custom install prompt immediately on page load
-        showInstallPrompt();
-        });
-
-        function showInstallPrompt() {
-        if (deferredPrompt) {
-            // Show the browser's install prompt
-            deferredPrompt.prompt();
-            // Wait for the user’s response
-            deferredPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-                console.log('User accepted the install prompt');
-            } else {
-                console.log('User dismissed the install prompt');
-            }
-            // Clear the deferredPrompt so it can only be used once
-            deferredPrompt = null;
-            });
-        }
-        }
-
-        // Trigger on page load
-        window.addEventListener('load', () => {
-        if (deferredPrompt) {
-            showInstallPrompt();
-        } else {
-            console.log('Install prompt not available yet');
-        }
-        });
 
         // Theme selection
         document.addEventListener('DOMContentLoaded', function() {
@@ -421,7 +451,129 @@
                     addSubject();
                 }
             });
+
+            const importForm = document.getElementById('importAiForm');
+            if (importForm) {
+                importForm.addEventListener('submit', handleImportAiSubmit);
+            }
+
+            const timetableImageInput = document.getElementById('timetableImage');
+            if (timetableImageInput) {
+                timetableImageInput.addEventListener('change', () => {
+                    const statusEl = document.getElementById('importAiStatus');
+                    if (!statusEl) return;
+                    if (timetableImageInput.files && timetableImageInput.files.length > 0) {
+                        const file = timetableImageInput.files[0];
+                        statusEl.classList.remove('hidden');
+                        statusEl.classList.remove('bg-red-50', 'border-red-300', 'text-red-800');
+                        statusEl.classList.add('bg-purple-50', 'border-purple-200', 'text-purple-800');
+                        statusEl.innerHTML = `<strong>Selected:</strong> ${file.name} (${Math.round(file.size / 1024)} KB)`;
+                    } else {
+                        statusEl.classList.add('hidden');
+                        statusEl.textContent = '';
+                    }
+                });
+            }
         });
+
+        function openImportAiModal() {
+            const modal = document.getElementById('importAiModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            const statusEl = document.getElementById('importAiStatus');
+            if (statusEl) {
+                statusEl.classList.add('hidden');
+                statusEl.textContent = '';
+            }
+            const form = document.getElementById('importAiForm');
+            if (form) {
+                form.reset();
+            }
+            isImportingAi = false;
+        }
+
+        function closeImportAiModal() {
+            if (isImportingAi) return; // prevent closing mid-upload
+            const modal = document.getElementById('importAiModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function handleImportAiSubmit(event) {
+            event.preventDefault();
+            if (isImportingAi) return;
+
+            const fileInput = document.getElementById('timetableImage');
+            const statusEl = document.getElementById('importAiStatus');
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                if (statusEl) {
+                    statusEl.classList.remove('hidden');
+                    statusEl.classList.remove('bg-purple-50', 'border-purple-200', 'text-purple-800');
+                    statusEl.classList.add('bg-red-50', 'border-red-300', 'text-red-800');
+                    statusEl.textContent = 'Please select a timetable image before continuing.';
+                }
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('timetableImage', fileInput.files[0]);
+
+            if (statusEl) {
+                statusEl.classList.remove('hidden');
+                statusEl.classList.remove('bg-red-50', 'border-red-300', 'text-red-800');
+                statusEl.classList.add('bg-purple-50', 'border-purple-200', 'text-purple-800');
+                statusEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing your timetable with Gemini…';
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-60', 'cursor-not-allowed');
+            }
+            isImportingAi = true;
+
+            try {
+                const response = await fetch('/api/timetable/import-ai', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    const message = result.error || 'Something went wrong while importing the timetable.';
+                    if (statusEl) {
+                        statusEl.classList.remove('bg-purple-50', 'border-purple-200', 'text-purple-800');
+                        statusEl.classList.add('bg-red-50', 'border-red-300', 'text-red-800');
+                        statusEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i>${message}`;
+                    }
+                } else {
+                    if (statusEl) {
+                        statusEl.classList.remove('bg-red-50', 'border-red-300', 'text-red-800');
+                        statusEl.classList.add('bg-green-50', 'border-green-200', 'text-green-800');
+                        statusEl.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Timetable created! Redirecting…';
+                    }
+                    setTimeout(() => {
+                        window.location.href = `/timetable/${result.id}`;
+                    }, 800);
+                }
+            } catch (error) {
+                console.error('AI import error:', error);
+                if (statusEl) {
+                    statusEl.classList.remove('bg-purple-50', 'border-purple-200', 'text-purple-800');
+                    statusEl.classList.add('bg-red-50', 'border-red-300', 'text-red-800');
+                    statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Failed to contact the AI service. Please try again later.';
+                }
+            } finally {
+                isImportingAi = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                }
+            }
+        }
     </script>
     
     <style>
