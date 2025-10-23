@@ -660,6 +660,7 @@
                                 <option value="easy">Easy</option>
                                 <option value="medium">Medium</option>
                                 <option value="hard">Hard</option>
+                                <option value="extreme">Extreme</option>
                             </select>
                             <button id="start-game">Start Game</button>
                         </div>
@@ -752,6 +753,7 @@
         const scoreList = document.getElementById('score-list');
         const countdownElement = document.getElementById('countdown');
         const hostControls = document.getElementById('host-controls');
+    difficultySelector.dataset.currentDifficulty = difficultySelector.value;
         
         // Game state variables
         let username = '';
@@ -774,6 +776,7 @@
         let shapeStartX, shapeStartY;
         let tempCanvas = document.createElement('canvas');
         let tempCtx = tempCanvas.getContext('2d');
+    let currentPlayers = [];
         
         // Check for username in URL
         window.addEventListener('load', () => {
@@ -845,6 +848,15 @@
                 const difficulty = difficultySelector.value;
                 socket.emit('start_game', { username, difficulty });
                 addSystemMessage("Starting the game...");
+            }
+        });
+
+        difficultySelector.addEventListener('change', () => {
+            const difficulty = difficultySelector.value;
+            if (isHost) {
+                socket.emit('set_difficulty', { username, difficulty });
+            } else {
+                difficultySelector.value = difficultySelector.dataset.currentDifficulty || difficultySelector.value;
             }
         });
         
@@ -1198,32 +1210,37 @@
 
         // Update player list
         socket.on('update_players', (players) => {
+            currentPlayers = players;
             playersList.innerHTML = '';
             playerCount.textContent = players.length;
 
-            // Disable start button if any player is not ready or game is in progress
             if (isHost) {
                 startGameButton.disabled = gameInProgress || !players.every(player => player.ready);
+            }
+
+            const selfState = players.find(player => player.username === username);
+            if (selfState) {
+                ready = selfState.ready;
+                readyUpButton.textContent = ready ? 'Cancel Ready' : 'Ready Up';
+                readyUpButton.classList.toggle('ready', ready);
             }
             
             players.forEach(player => {
                 const li = document.createElement('li');
+                const totalPoints = player.points ?? 0;
                 
-                // Player info section
                 const playerInfo = document.createElement('div');
                 playerInfo.className = 'player-info';
                 
-                // Avatar (first letter of username)
                 const avatar = document.createElement('div');
                 avatar.className = 'player-avatar';
                 avatar.textContent = player.username.charAt(0).toUpperCase();
                 
-                // Username
                 const nameSpan = document.createElement('span');
-                nameSpan.textContent = player.username;
+                nameSpan.textContent = `${player.username} (${totalPoints} pts)`;
                 
-                // Host badge if applicable
                 if (player.isHost) {
+                    nameSpan.appendChild(document.createTextNode(' '));
                     const hostBadge = document.createElement('span');
                     hostBadge.className = 'host-badge';
                     hostBadge.textContent = 'Host';
@@ -1233,7 +1250,6 @@
                 playerInfo.appendChild(avatar);
                 playerInfo.appendChild(nameSpan);
                 
-                // Status badge
                 const statusBadge = document.createElement('span');
                 statusBadge.className = 'player-status';
                 
@@ -1247,11 +1263,9 @@
                     statusBadge.textContent = 'Not Ready';
                 }
                 
-                // Add both sections to the list item
                 li.appendChild(playerInfo);
                 li.appendChild(statusBadge);
                 
-                // Highlight your own username
                 if (player.username === username) {
                     li.style.border = '2px solid var(--success)';
                 }
@@ -1271,12 +1285,36 @@
         });
 
         // Handle game end
-        socket.on('game_ended', () => {
+        socket.on('game_ended', (data = {}) => {
             gameInProgress = false;
+            roundInProgress = false;
+            clearInterval(timerInterval);
             endGameButton.style.display = 'none';
             endGameButton.disabled = false;
             addSystemMessage("Game ended. Host can start a new game when players are ready.");
-            startGameButton.disabled = !pictionary_players.every(player => player.ready);
+
+            if (Array.isArray(data.scores) && data.scores.length) {
+                const summary = data.scores
+                    .map(score => `${score.username}: ${score.totalPoints ?? 0} pts`)
+                    .join(', ');
+                addSystemMessage(`Final scores — ${summary}`);
+            }
+
+            if (isHost) {
+                startGameButton.disabled = !currentPlayers.every(player => player.ready);
+            }
+        });
+
+        socket.on('difficulty_updated', (data) => {
+            if (!data || !data.difficulty) return;
+            const previous = difficultySelector.dataset.currentDifficulty;
+            difficultySelector.dataset.currentDifficulty = data.difficulty;
+            if (!isHost) {
+                difficultySelector.value = data.difficulty;
+            }
+            if (previous !== data.difficulty) {
+                addSystemMessage(`Difficulty set to ${data.difficulty}.`);
+            }
         });
 
         // Assign host privileges
@@ -1313,6 +1351,12 @@
             isDrawer = data.drawer === username;
             roundInProgress = true;
             gameActive = true;
+            if (data.difficulty) {
+                difficultySelector.dataset.currentDifficulty = data.difficulty;
+                if (!isHost) {
+                    difficultySelector.value = data.difficulty;
+                }
+            }
             gameStateElement.textContent = isDrawer ? "You are drawing!" : `${data.drawer} is drawing`;
             
             // Clear the canvas
@@ -1592,14 +1636,24 @@
             
             // Show scores
             scoreList.innerHTML = '';
-            data.scores.forEach(score => {
+            const scores = Array.isArray(data.scores) ? data.scores : [];
+            if (scores.length === 0) {
                 const li = document.createElement('li');
-                li.innerHTML = `
-                    <span>${score.username}</span>
-                    <span class="score-value">+${score.points}</span>
-                `;
+                li.innerHTML = '<span>No points awarded this round.</span>';
                 scoreList.appendChild(li);
-            });
+            } else {
+                scores.forEach(score => {
+                    const earned = (score.pointsEarned ?? score.points ?? 0);
+                    const total = score.totalPoints ?? earned;
+                    const earnedLabel = earned >= 0 ? `+${earned}` : `${earned}`;
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span>${score.username}</span>
+                        <span class="score-value">${earnedLabel} (${total} pts)</span>
+                    `;
+                    scoreList.appendChild(li);
+                });
+            }
             
             // Start countdown for next round
             let countdown = 5;

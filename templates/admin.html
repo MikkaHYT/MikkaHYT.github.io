@@ -30,6 +30,12 @@
     </style>
 </head>
 <body>
+    <script>
+        const password = prompt('Enter admin password:');
+        if (password !== 'Admin123!') {
+            history.back();
+        }
+    </script>
     <header>
         <h1>Admin Panel - Chat Server</h1>
     </header>

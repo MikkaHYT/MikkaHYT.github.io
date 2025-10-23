@@ -11,6 +11,7 @@ import json
 import uuid
 import base64
 import threading
+import random
 import requests
 import hashlib
 import secrets
@@ -638,7 +639,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # defs
-app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-change-this')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///timetable.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -1697,10 +1697,6 @@ def whiteboard():
 def pictionary():
     return render_template('pictionary.html')
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
 # Socket.IO events
 #@socketio.on('connect')
 #def handle_connect():
@@ -2349,7 +2345,9 @@ def handle_disconnect():
     user_id = request.sid  # Use the session ID as the unique user ID
     if user_id in active_cursors:
         del active_cursors[user_id]
-        emit('cursor_disconnect', {'id': user_id}, broadcast=True)
+        socketio.emit('cursor_disconnect', {'id': user_id}, broadcast=True)
+
+    _handle_pictionary_disconnect(user_id)
 
 @socketio.on('whiteboard_mouseup')
 def handle_whiteboard_mouseup(data):
@@ -2457,144 +2455,450 @@ def handle_start_wordchain(data):
 
 # Pictionary
 
-# In-memory storage for Pictionary
-pictionary = {'current_word': None, 'drawer': None, 'guesses': []}
+GUESSER_POINTS = 10
+DRAWER_POINTS = 5
 
-@socketio.on('start_pictionary')
-def handle_start_pictionary(data):
-    pictionary['current_word'] = data['word']
-    pictionary['drawer'] = data['drawer']
-    emit('pictionary_started', {'drawer': data['drawer'], 'word': data['word']}, broadcast=True)
+pictionary = {
+    'current_word': None,
+    'drawer': None,
+    'guesses': [],
+    'round_active': False,
+}
 
-@socketio.on('guess_pictionary')
-def handle_guess_pictionary(data):
-    username = data.get('username')
-    guess = data.get('guess')
-
-    if guess.lower() == pictionary['current_word'].lower():
-        # Send correct guess message
-        emit('pictionary_correct', {'username': username}, broadcast=True)
-        
-        # Send word reveal as system message
-        emit('pictionary_system_message', {
-            'message': f"The word was: {pictionary['current_word']}"
-        }, broadcast=True)
-        
-        # Show the end round screen with the word
-        emit('round_end', {
-            'word': pictionary['current_word'],
-            'scores': [{'username': username, 'points': 10}]  # Simple scoring
-        }, broadcast=True)
-        
-        emit('clear_canvas', broadcast=True)  # Clear the canvas for all players
-        
-        # Wait a few seconds before starting a new round
-        socketio.sleep(5)
-        start_new_round()  # Start a new round
-    else:
-        emit('pictionary_incorrect', {'username': username, 'guess': guess}, broadcast=True)
-
-# In-memory storage for Pictionary players
 pictionary_players = []
-pictionary_ready = []
+pictionary_difficulty = 'easy'  # Default difficulty
+game_in_progress = False
+end_game_votes = set()
 
+
+def _get_player_by_username(username):
+    for player in pictionary_players:
+        if player['username'] == username:
+            return player
+    return None
+
+
+def _serialize_pictionary_players():
+    return [
+        {
+            'username': player['username'],
+            'ready': player.get('ready', False),
+            'isHost': player.get('isHost', False),
+            'isDrawing': player.get('isDrawing', False),
+            'points': player.get('points', 0)
+        }
+        for player in pictionary_players
+    ]
+
+
+def _broadcast_player_state():
+    socketio.emit('update_players', _serialize_pictionary_players(), broadcast=True)
+
+
+def _reset_round_state():
+    pictionary['current_word'] = None
+    pictionary['drawer'] = None
+    pictionary['round_active'] = False
+    pictionary['guesses'] = []
+
+
+def _eligible_players():
+    eligible = [player for player in pictionary_players if player.get('ready', False)]
+    return eligible or pictionary_players[:]
+
+
+def _select_next_drawer():
+    eligible = _eligible_players()
+    if not eligible:
+        return None
+
+    previous_drawer = pictionary.get('drawer')
+    usernames = [player['username'] for player in eligible]
+
+    if previous_drawer in usernames:
+        current_index = usernames.index(previous_drawer)
+        next_index = (current_index + 1) % len(usernames)
+        return eligible[next_index]
+
+    return eligible[0]
+
+
+def _schedule_new_round(delay=5):
+    def _task():
+        socketio.sleep(delay)
+        if game_in_progress:
+            start_new_round()
+
+    socketio.start_background_task(_task)
+
+
+def _final_scores_payload():
+    return [
+        {'username': player['username'], 'totalPoints': player.get('points', 0)}
+        for player in pictionary_players
+    ]
+
+
+def _award_points_on_correct_guess(guesser_username):
+    round_scores = []
+    guesser = _get_player_by_username(guesser_username)
+    if guesser:
+        guesser['points'] = guesser.get('points', 0) + GUESSER_POINTS
+        round_scores.append({
+            'username': guesser_username,
+            'pointsEarned': GUESSER_POINTS,
+            'totalPoints': guesser['points']
+        })
+
+    drawer_username = pictionary.get('drawer')
+    if drawer_username and drawer_username != guesser_username:
+        drawer_player = _get_player_by_username(drawer_username)
+        if drawer_player:
+            drawer_player['points'] = drawer_player.get('points', 0) + DRAWER_POINTS
+            round_scores.append({
+                'username': drawer_username,
+                'pointsEarned': DRAWER_POINTS,
+                'totalPoints': drawer_player['points']
+            })
+
+    return round_scores
+
+
+def _end_game(reason=None):
+    global game_in_progress
+    if not game_in_progress:
+        return
+
+    game_in_progress = False
+    _reset_round_state()
+    end_game_votes.clear()
+
+    for player in pictionary_players:
+        player['isDrawing'] = False
+        player['ready'] = False
+
+    if reason:
+        socketio.emit('pictionary_system_message', {'message': reason}, broadcast=True)
+
+    socketio.emit('game_ended', {'scores': _final_scores_payload()}, broadcast=True)
+    _broadcast_player_state()
+
+
+def _handle_pictionary_disconnect(sid):
+    disconnected_player = next((player for player in pictionary_players if player.get('sid') == sid), None)
+    if not disconnected_player:
+        return
+
+    username = disconnected_player['username']
+    was_host = disconnected_player.get('isHost', False)
+    was_drawer = pictionary.get('drawer') == username
+
+    pictionary_players.remove(disconnected_player)
+    end_game_votes.discard(username)
+
+    if not pictionary_players:
+        _end_game('All players left the game.')
+        return
+
+    if was_host:
+        pictionary_players[0]['isHost'] = True
+        socketio.emit('assign_host', {'isHost': True}, room=pictionary_players[0].get('sid'))
+
+    if was_drawer and game_in_progress:
+        pictionary['round_active'] = False
+        socketio.emit(
+            'pictionary_system_message',
+            {'message': f"{username} (the drawer) disconnected. Selecting a new drawer."},
+            broadcast=True
+        )
+        _broadcast_player_state()
+        _schedule_new_round(delay=1)
+    else:
+        _broadcast_player_state()
+
+
+def _is_current_drawer_sid(sid):
+    drawer_username = pictionary.get('drawer')
+    if not drawer_username:
+        return False
+    player = next((entry for entry in pictionary_players if entry.get('sid') == sid), None)
+    return bool(player and player['username'] == drawer_username)
 
 
 @socketio.on('join_pictionary')
 def handle_join_pictionary(data):
     username = data.get('username')
-    
-    # Store the user's sid for disconnect handling
-    if username not in [player['username'] for player in pictionary_players]:
-        is_host = len(pictionary_players) == 0
-        pictionary_players.append({
-            'username': username, 
-            'ready': False, 
-            'isHost': is_host,
-            'sid': request.sid  # Store the socket ID
-        })
-        emit('update_players', pictionary_players, broadcast=True)
-        
-        if is_host:
-            emit('assign_host', {'isHost': True}, room=request.sid)
-@socketio.on('ready_up')
-def handle_ready_up(data):
-    username = data.get('username')
-    ready = data.get('ready')
-
-    for player in pictionary_players:
-        if player['username'] == username:
-            player['ready'] = ready
-            break
-
-    emit('update_players', pictionary_players, broadcast=True)
-
-    # Check if all players are ready
-    if all(player['ready'] for player in pictionary_players):
-        # Notify the host that the game can be started
-        for player in pictionary_players:
-            if player['isHost']:
-                emit('game_ready_to_start', room=player['username'])
-                break
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    global pictionary_players, game_in_progress
-    
-    # Get the disconnected user's sid
-    sid = request.sid
-    
-    # Find the user in pictionary_players
-    disconnected_player = None
-    for i, player in enumerate(pictionary_players):
-        if player['username'] == sid or player.get('sid') == sid:
-            disconnected_player = player
-            pictionary_players.pop(i)
-            break
-    
-    if disconnected_player:
-        # If the disconnected player was the host, assign a new host
-        if disconnected_player.get('isHost') and pictionary_players:
-            pictionary_players[0]['isHost'] = True
-            emit('assign_host', {'isHost': True}, room=pictionary_players[0].get('sid', pictionary_players[0]['username']))
-        
-        # If the disconnected player was the drawer, start a new round
-        if game_in_progress and pictionary.get('drawer') == disconnected_player['username']:
-            emit('pictionary_system_message', {
-                'message': f"{disconnected_player['username']} (the drawer) disconnected. Starting new round."
-            }, broadcast=True)
-            start_new_round()
-        
-        # Emit updated player list to all clients
-        emit('update_players', pictionary_players, broadcast=True)
-
-import random
-import requests
-
-def start_new_round():
-    if len(pictionary_players) < 2:
-        emit('pictionary_system_message', {'message': 'Not enough players to start the game.'}, broadcast=True)
+    if not username:
         return
 
-    # Randomly select a drawer
-    drawer = random.choice(pictionary_players)
-    pictionary['drawer'] = drawer['username']
+    existing_player = _get_player_by_username(username)
+    if existing_player:
+        existing_player['sid'] = request.sid
+        existing_player.setdefault('points', 0)
+        if not game_in_progress:
+            existing_player['ready'] = False
+        socketio.emit('pictionary_system_message', {'message': f"{username} rejoined the lobby."}, room=request.sid)
+    else:
+        is_host = len(pictionary_players) == 0
+        new_player = {
+            'username': username,
+            'ready': False,
+            'isHost': is_host,
+            'isDrawing': False,
+            'points': 0,
+            'sid': request.sid
+        }
+        pictionary_players.append(new_player)
+
+        if is_host:
+            socketio.emit('assign_host', {'isHost': True}, room=request.sid)
+
+        socketio.emit('pictionary_system_message', {'message': f"{username} joined the lobby."}, broadcast=True)
+
+    _broadcast_player_state()
+
+
+@socketio.on('ready_up')
+def handle_ready_up(data):
+    if game_in_progress:
+        return
+
+    username = data.get('username')
+    ready = bool(data.get('ready'))
+    player = _get_player_by_username(username)
+    if not player:
+        return
+
+    player['ready'] = ready
+    _broadcast_player_state()
+
+    if pictionary_players and all(entry['ready'] for entry in pictionary_players):
+        host_player = next((entry for entry in pictionary_players if entry.get('isHost')), None)
+        if host_player:
+            socketio.emit('game_ready_to_start', room=host_player.get('sid'))
+
+
+def start_new_round():
+    if not game_in_progress:
+        return
+
+    eligible_players = _eligible_players()
+    if len(eligible_players) < 2:
+        _end_game('Not enough players to continue the game.')
+        return
+
+    drawer_player = _select_next_drawer()
+    if not drawer_player:
+        socketio.emit('pictionary_system_message', {'message': 'Unable to select a drawer.'}, broadcast=True)
+        return
+
     pictionary['current_word'] = generate_random_word()
+    pictionary['drawer'] = drawer_player['username']
+    pictionary['round_active'] = True
+    pictionary['guesses'] = []
 
-    # Update drawer status
     for player in pictionary_players:
-        player['isDrawing'] = player['username'] == drawer['username']
+        player['isDrawing'] = player['username'] == pictionary['drawer']
 
-    # Notify all players about the new round
-    emit('new_round', {'drawer': pictionary['drawer'], 'word': pictionary['current_word']}, broadcast=True)
-    
-    # Announce the new round as a system message
-    emit('pictionary_system_message', {
-        'message': f"New round started! {drawer['username']} is drawing."
+    socketio.emit('new_round', {
+        'drawer': pictionary['drawer'],
+        'word': pictionary['current_word'],
+        'difficulty': pictionary_difficulty
     }, broadcast=True)
-    
-    # Update the player list with the new drawer
-    emit('update_players', pictionary_players, broadcast=True)
+
+    socketio.emit(
+        'pictionary_system_message',
+        {'message': f"New round started! {pictionary['drawer']} is drawing ({pictionary_difficulty} difficulty)."},
+        broadcast=True
+    )
+
+    end_game_votes.clear()
+    _broadcast_player_state()
+
+
+@socketio.on('start_game')
+def handle_start_game(data):
+    global game_in_progress, pictionary_difficulty
+
+    username = data.get('username')
+    host_player = next((entry for entry in pictionary_players if entry.get('isHost')), None)
+
+    if not host_player or host_player['username'] != username:
+        return
+
+    if game_in_progress:
+        socketio.emit('game_error', {'message': 'Game already in progress'}, room=request.sid)
+        return
+
+    if len(pictionary_players) < 2:
+        socketio.emit('game_error', {'message': 'Need at least two players to start the game'}, room=request.sid)
+        return
+
+    if not all(entry['ready'] for entry in pictionary_players):
+        socketio.emit('game_error', {'message': 'Not all players are ready'}, room=request.sid)
+        return
+
+    requested_difficulty = (data.get('difficulty') or pictionary_difficulty).lower()
+    allowed_difficulties = {'easy', 'medium', 'hard', 'extreme', 'custom'}
+    if requested_difficulty in allowed_difficulties:
+        pictionary_difficulty = requested_difficulty
+        socketio.emit('difficulty_updated', {'difficulty': pictionary_difficulty}, broadcast=True)
+
+    game_in_progress = True
+    _reset_round_state()
+    end_game_votes.clear()
+
+    for player in pictionary_players:
+        player['points'] = 0
+        player['isDrawing'] = False
+
+    socketio.emit('pictionary_system_message', {'message': 'Game starting!'}, broadcast=True)
+    _broadcast_player_state()
+    start_new_round()
+
+
+@socketio.on('set_difficulty')
+def handle_set_difficulty(data):
+    global pictionary_difficulty
+
+    username = data.get('username')
+    difficulty = (data.get('difficulty') or '').lower()
+
+    host_player = next((entry for entry in pictionary_players if entry.get('isHost')), None)
+    if not host_player or host_player['username'] != username:
+        return
+
+    allowed_difficulties = {'easy', 'medium', 'hard', 'extreme', 'custom'}
+    if difficulty not in allowed_difficulties:
+        socketio.emit('game_error', {'message': 'Invalid difficulty selection'}, room=request.sid)
+        return
+
+    pictionary_difficulty = difficulty
+    socketio.emit('difficulty_updated', {'difficulty': pictionary_difficulty}, broadcast=True)
+    socketio.emit('pictionary_system_message', {
+        'message': f"Difficulty set to {pictionary_difficulty}."
+    }, broadcast=True)
+
+
+@socketio.on('guess_pictionary')
+def handle_guess_pictionary(data):
+    if not game_in_progress or not pictionary.get('round_active'):
+        return
+
+    username = data.get('username')
+    guess = (data.get('guess') or '').strip()
+
+    if not username or not guess:
+        return
+
+    pictionary['guesses'].append({'username': username, 'guess': guess})
+
+    if pictionary['current_word'] and guess.lower() == pictionary['current_word'].lower():
+        pictionary['round_active'] = False
+        round_scores = _award_points_on_correct_guess(username)
+
+        socketio.emit('pictionary_correct', {'username': username}, broadcast=True)
+        socketio.emit('receive_message', {
+            'username': 'Server',
+            'profilePic': '',
+            'message': f"{username} guessed correctly! The word was: {pictionary['current_word']}",
+            'time': datetime.now().strftime('%H:%M')
+        }, broadcast=True)
+
+        socketio.emit('round_end', {
+            'word': pictionary['current_word'],
+            'scores': round_scores
+        }, broadcast=True)
+
+        socketio.emit('clear_canvas', broadcast=True)
+        _broadcast_player_state()
+        _schedule_new_round()
+    else:
+        socketio.emit('pictionary_incorrect', {'username': username, 'guess': guess}, broadcast=True)
+
+
+@socketio.on('vote_end_game')
+def handle_vote_end_game(data):
+    if not game_in_progress:
+        return
+
+    username = data.get('username')
+    if not username or not _get_player_by_username(username):
+        return
+
+    end_game_votes.add(username)
+    socketio.emit(
+        'end_game_votes',
+        {'votes': len(end_game_votes), 'total': len(_eligible_players())},
+        broadcast=True
+    )
+
+    if len(end_game_votes) >= len(_eligible_players()):
+        _end_game('All players voted to end the game.')
+
+
+@socketio.on('round_timeout')
+def handle_round_timeout(data):
+    if not game_in_progress or not pictionary.get('round_active'):
+        return
+
+    pictionary['round_active'] = False
+    word = pictionary.get('current_word') or 'Unknown'
+
+    socketio.emit('pictionary_system_message', {
+        'message': f"Time's up! The word was: {word}"
+    }, broadcast=True)
+
+    socketio.emit('round_end', {
+        'word': word,
+        'scores': []
+    }, broadcast=True)
+
+    _broadcast_player_state()
+    _schedule_new_round()
+
+
+@socketio.on('start_draw')
+def handle_start_draw(data):
+    if pictionary.get('round_active') and _is_current_drawer_sid(request.sid):
+        socketio.emit('start_draw', data, broadcast=True, include_self=False)
+
+
+@socketio.on('stop_draw')
+def handle_stop_draw(data=None):
+    if pictionary.get('round_active') and _is_current_drawer_sid(request.sid):
+        socketio.emit('stop_draw', broadcast=True, include_self=False)
+
+
+@socketio.on('draw')
+def handle_draw(data):
+    if pictionary.get('round_active') and _is_current_drawer_sid(request.sid):
+        socketio.emit('draw', data, broadcast=True, include_self=False)
+
+
+@socketio.on('fill')
+def handle_fill(data):
+    if pictionary.get('round_active') and _is_current_drawer_sid(request.sid):
+        socketio.emit('fill', data, broadcast=True, include_self=False)
+
+
+@socketio.on('undo_canvas')
+def handle_undo_canvas():
+    socketio.emit('undo_canvas', broadcast=True, include_self=False)
+
+
+@socketio.on('clear_canvas')
+def handle_clear_canvas():
+    socketio.emit('clear_canvas', broadcast=True)
+
+
+@socketio.on('draw_shape')
+def handle_draw_shape(data):
+    if pictionary.get('round_active') and _is_current_drawer_sid(request.sid):
+        socketio.emit('draw_shape', data, broadcast=True, include_self=False)
+
+
+
 def generate_random_word():
     # Predefined list of "easy" words
     easy_words = [
@@ -2795,16 +3099,16 @@ def generate_random_word():
         "fun house", "member", "retire", "hearse"
     ]
     if pictionary_difficulty == 'easy':
-        print("Easy words selected")
         return random.choice(easy_words)
-    elif pictionary_difficulty == 'medium':
-        print("Medium words selected")
+    if pictionary_difficulty == 'medium':
         return random.choice(medium_words)
-    elif pictionary_difficulty == 'hard':
-        print("Hard words selected")
+    if pictionary_difficulty == 'hard':
         return random.choice(hard_words)
-    else:
-        return random.choice(easy_words)  # Default to easy if difficulty is invalid
+    if pictionary_difficulty == 'extreme':
+        return random.choice(extreme_words)
+    if pictionary_difficulty == 'custom':
+        return generate_custom_word()
+    return random.choice(easy_words)
 
 def generate_custom_word():
     # Read custom words from a JSON file
@@ -2815,161 +3119,6 @@ def generate_custom_word():
     except (FileNotFoundError, json.JSONDecodeError):
         # Fallback to a predefined word if the file is missing or invalid
         return "default_word"
-
-@socketio.on('start_draw')
-def handle_start_draw(data):
-    emit('start_draw', data, broadcast=True, include_self=False)
-
-@socketio.on('stop_draw')
-def handle_stop_draw():
-    emit('stop_draw', broadcast=True, include_self=False)
-
-@socketio.on('draw')
-def handle_draw(data):
-    emit('draw', data, broadcast=True, include_self=False)
-
-@socketio.on('fill')
-def handle_fill(data):
-    emit('fill', data, broadcast=True, include_self=False)
-
-@socketio.on('undo_canvas')
-def handle_undo_canvas():
-    print("Undo canvas event received")
-    emit('undo_canvas', broadcast=True, include_self=False)
-
-@socketio.on('guess_pictionary')
-def handle_guess_pictionary(data):
-    username = data.get('username')
-    guess = data.get('guess')
-
-    if guess.lower() == pictionary['current_word'].lower():
-        emit('pictionary_correct', {'username': username}, broadcast=True)
-        
-        # Announce the correct word to the chat
-        emit('receive_message', {
-            'username': 'Server',
-            'profilePic': '',
-            'message': f"{username} guessed correctly! The word was: {pictionary['current_word']}",
-            'time': datetime.now().strftime('%H:%M')
-        }, broadcast=True)
-        
-        # Show the end round screen with the word
-        emit('round_end', {
-            'word': pictionary['current_word'],
-            'scores': [{'username': username, 'points': 10}]  # Simple scoring
-        }, broadcast=True)
-        
-        emit('clear_canvas', broadcast=True)  # Clear the canvas for all players
-        
-        # Wait a few seconds before starting a new round
-        socketio.sleep(5)
-        start_new_round()  # Start a new round
-    else:
-        emit('pictionary_incorrect', {'username': username, 'guess': guess}, broadcast=True)
-
-@socketio.on('clear_canvas')
-def handle_clear_canvas():
-    emit('clear_canvas', broadcast=True)
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    user_id = request.sid
-    for player in pictionary_players:
-        if player['username'] == user_id:
-            pictionary_players.remove(player)
-            break
-
-    # Reassign host if the current host leaves
-    if any(player['isHost'] for player in pictionary_players):
-        for player in pictionary_players:
-            if player['isHost']:
-                break
-    elif pictionary_players:
-        pictionary_players[0]['isHost'] = True
-        emit('assign_host', {'isHost': True}, room=pictionary_players[0]['username'])
-
-    emit('update_players', pictionary_players, broadcast=True)
-
-pictionary_difficulty = 'easy'  # Default difficulty
-
-@socketio.on('set_difficulty')
-def handle_set_difficulty(data):
-    global pictionary_difficulty
-    username = data.get('username')
-    difficulty = data.get('difficulty')
-
-    # Only the host can set the difficulty
-    for player in pictionary_players:
-        if player['username'] == username and player['isHost']:
-            pictionary_difficulty = difficulty
-            emit('difficulty_updated', {'difficulty': pictionary_difficulty}, broadcast=True)
-            break
-
-# Add these variables to track game state
-game_in_progress = False
-end_game_votes = set()
-
-
-@socketio.on('start_game')
-def handle_start_game(data):
-    global game_in_progress
-    username = data.get('username')
-
-    # Only host can start game if all players are ready and no game in progress
-    for player in pictionary_players:
-        if player['username'] == username and player['isHost']:
-            if not all(player['ready'] for player in pictionary_players):
-                emit('game_error', {'message': 'Not all players are ready'}, room=request.sid)
-                return
-            
-            if game_in_progress:
-                emit('game_error', {'message': 'Game already in progress'}, room=request.sid)
-                return
-                
-            game_in_progress = True
-            end_game_votes.clear()
-            start_new_round()
-            break
-
-@socketio.on('vote_end_game')
-def handle_vote_end_game(data):
-    username = data.get('username')
-    end_game_votes.add(username)
-    
-    # Check if all players voted to end
-    if len(end_game_votes) == len(pictionary_players):
-        emit('game_ended', broadcast=True)
-        global game_in_progress
-        game_in_progress = False
-        end_game_votes.clear()
-    else:
-        # Update all clients with current vote count
-        emit('end_game_votes', {'votes': len(end_game_votes), 'total': len(pictionary_players)}, broadcast=True)
-
-@socketio.on('round_timeout')
-def handle_round_timeout(data):
-    word = data.get('word')
-    
-    # Send a system message to the Pictionary chat
-    emit('pictionary_system_message', {
-        'message': f"Time's up! The word was: {word}"
-    }, broadcast=True)
-    
-    # Show the word in the game area
-    emit('round_end', {
-        'word': word,
-        'scores': []  # You can add scoring logic here if desired
-    }, broadcast=True)
-    
-    # Wait a few seconds before starting a new round
-    socketio.sleep(5)
-    start_new_round()
-
-@socketio.on('draw_shape')
-def handle_draw_shape(data):
-    emit('draw_shape', data, broadcast=True, include_self=False)
-
-
 
 # Submit custom word
 @socketio.on('submit_custom_word')
