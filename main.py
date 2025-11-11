@@ -37,7 +37,11 @@ def index():
 @app.route('/games')
 def games():
     return render_template('games.html')
-    
+
+@app.route('/eaglercraft')
+def eaglercraft():
+    return render_template('eaglercraftx.html')
+
 @app.route('/imagegen')
 def imagegen():
     return render_template('imagegen.html') 
