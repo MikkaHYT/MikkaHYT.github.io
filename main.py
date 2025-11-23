@@ -1094,7 +1094,7 @@ def create_timetable():
     data = request.json
     name = data.get('name', 'New Revision Timetable')
     theme = data.get('theme', 'academic')
-    subjects = data.get('subjects', [])
+    subjects = ([''])
     
     # Define theme-based color schemes
     theme_colors = {
@@ -1191,7 +1191,7 @@ def create_timetable():
             'lunch_break': {'start': '12:30', 'duration': 60},
             'time_format': '24h'
         }),
-        study_subjects=None,
+        study_subjects=json.dumps(subjects),
         theme=theme,
         revision_settings=json.dumps({
             'show_progress': True,
