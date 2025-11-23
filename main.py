@@ -1191,7 +1191,7 @@ def create_timetable():
             'lunch_break': {'start': '12:30', 'duration': 60},
             'time_format': '24h'
         }),
-        study_subjects=json.dumps(subjects),
+        study_subjects=None,
         theme=theme,
         revision_settings=json.dumps({
             'show_progress': True,
