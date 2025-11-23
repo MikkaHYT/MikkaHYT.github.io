@@ -979,7 +979,7 @@ def microsoft_callback():
     )
     result = client.acquire_token_by_authorization_code(
         code, scopes=MICROSOFT_SCOPE,
-        redirect_uri=url_for('microsoft_callback', _external=True)
+        redirect_uri=url_for('microsoft_callback', _external=True, _scheme='https')
     )
     
     if "error" in result:
