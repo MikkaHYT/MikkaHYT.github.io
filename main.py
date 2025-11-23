@@ -1094,7 +1094,7 @@ def create_timetable():
     data = request.json
     name = data.get('name', 'New Revision Timetable')
     theme = data.get('theme', 'academic')
-    subjects = data.get('subjects', ['Mathematics', 'Science', 'English', 'History'])
+    subjects = data.get('subjects', [])
     
     # Define theme-based color schemes
     theme_colors = {
