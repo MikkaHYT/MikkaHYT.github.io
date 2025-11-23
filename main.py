@@ -963,7 +963,7 @@ def microsoft_login():
         client_credential=MICROSOFT_CLIENT_SECRET,
     )
     auth_url = client.get_authorization_request_url(
-        MICROSOFT_SCOPE, redirect_uri=url_for('microsoft_callback', _external=True)
+        MICROSOFT_SCOPE, redirect_uri=url_for('microsoft_callback', _external=True, _scheme='https')
     )
     return redirect(auth_url)
 
