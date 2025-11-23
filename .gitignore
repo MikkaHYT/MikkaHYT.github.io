@@ -1,3 +1,4 @@
 chat.db
 instance/timetable.db
 instance/timetable.local.bak
+.env
