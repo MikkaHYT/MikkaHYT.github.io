@@ -1,44 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Timetable App - Login</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+
 </head>
+
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center">
     <div class="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
         <div class="text-center mb-8">
             <h1 class="text-3xl font-bold text-gray-800 mb-2">Timetable App</h1>
             <p class="text-gray-600">Create and manage your personalized timetables</p>
         </div>
-        
+
         <div class="space-y-6">
             <div class="text-center">
                 <div id="g_id_onload"
-                     data-client_id="897054939253-318fpnpmp02vp2b8ffh1bodi2n83hf4g.apps.googleusercontent.com"
-                     data-context="signin"
-                     data-ux_mode="popup"
-                     data-callback="handleCredentialResponse"
-                     data-auto_prompt="false">
+                    data-client_id="897054939253-318fpnpmp02vp2b8ffh1bodi2n83hf4g.apps.googleusercontent.com"
+                    data-context="signin" data-ux_mode="popup" data-callback="handleCredentialResponse"
+                    data-auto_prompt="false">
                 </div>
-                
-                <div class="g_id_signin"
-                     data-type="standard"
-                     data-shape="rectangular"
-                     data-theme="outline"
-                     data-text="signin_with"
-                     data-size="large"
-                     data-logo_alignment="left">
+
+                <div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline"
+                    data-text="signin_with" data-size="large" data-logo_alignment="left">
                 </div>
+
+                <!-- Microsoft Sign In Button -->
+                <a href="/auth/microsoft/login"
+                    class="mt-4 w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    <svg class="h-5 w-5 mr-2" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                        <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                        <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                        <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                    </svg>
+                    Sign in with Microsoft
+                </a>
             </div>
-            
+
             <div class="text-center text-sm text-gray-500">
                 <p>Sign in with Google to access your timetables</p>
             </div>
         </div>
-        
+
         <div class="mt-8 text-center">
             <div class="flex items-center justify-center space-x-4 text-sm text-gray-500">
                 <span>✨ Auto-save</span>
@@ -51,10 +59,10 @@
     <script>
         // Replace with your actual Google Client ID
         const GOOGLE_CLIENT_ID = '897054939253-318fpnpmp02vp2b8ffh1bodi2n83hf4g.apps.googleusercontent.com';
-        
+
         // Update the data-client_id attribute (already set in HTML above)
         // document.getElementById('g_id_onload').setAttribute('data-client_id', GOOGLE_CLIENT_ID);
-        
+
         function handleCredentialResponse(response) {
             // Send the ID token to your backend
             fetch('/auth/google', {
@@ -66,19 +74,22 @@
                     idtoken: response.credential
                 })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.href = '/dashboard';
-                } else {
-                    alert('Authentication failed: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Authentication failed');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '/dashboard';
+                    } else {
+                        alert('Authentication failed: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Authentication failed');
+                });
         }
+
+
     </script>
 </body>
+
 </html>

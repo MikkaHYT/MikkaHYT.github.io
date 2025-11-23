@@ -638,6 +638,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+import msal
+import jwt
+from jwt.algorithms import RSAAlgorithm
 
 # Load environment variables
 load_dotenv()
@@ -661,10 +664,18 @@ login_manager.login_view = 'login'
 # Google OAuth settings
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '897054939253-318fpnpmp02vp2b8ffh1bodi2n83hf4g.apps.googleusercontent.com')
 
+# Microsoft OAuth settings
+MICROSOFT_CLIENT_ID = os.getenv('MICROSOFT_CLIENT_ID', 'your-client-id')
+MICROSOFT_CLIENT_SECRET = os.getenv('MICROSOFT_CLIENT_SECRET', 'your-client-secret')
+MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/consumers"
+MICROSOFT_REDIRECT_PATH = "/auth/microsoft/callback"
+MICROSOFT_SCOPE = ["User.Read"]
+
 # Models
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     google_id = db.Column(db.String(100), unique=True, nullable=False)
+    microsoft_id = db.Column(db.String(100), unique=True, nullable=True)
     email = db.Column(db.String(100), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     profile_pic = db.Column(db.String(200))
@@ -675,21 +686,20 @@ class Timetable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False, default='My Timetable')
-    row_headers = db.Column(db.Text, default='[]')  # JSON array of row headers
-    column_headers = db.Column(db.Text, default='[]')  # JSON array of column headers
-    cells_data = db.Column(db.Text, default='{}')  # JSON object of cell data
-    color_scheme = db.Column(db.Text, default='{}')  # JSON object for colors
-    time_slot_mode = db.Column(db.Boolean, default=True)  # True for time slots, False for custom text
-    time_slot_settings = db.Column(db.Text, default='{}')  # JSON object for time slot configuration
-    study_subjects = db.Column(db.Text, default='[]')  # JSON array of study subjects
-    theme = db.Column(db.String(50), default='academic')  # Theme name
-    revision_settings = db.Column(db.Text, default='{}')  # Revision specific settings
-    notes_data = db.Column(db.Text, default='{}')  # JSON object for notes (general, study, todos)
-    study_time_data = db.Column(db.Text, default='{}')  # JSON object for study time tracking
-    color_library = db.Column(db.Text, default='[]')  # JSON array of saved custom colors
+    row_headers = db.Column(db.Text, default='[]')
+    column_headers = db.Column(db.Text, default='[]')
+    cells_data = db.Column(db.Text, default='{}')
+    color_scheme = db.Column(db.Text, default='{}')
+    time_slot_mode = db.Column(db.Boolean, default=True)
+    time_slot_settings = db.Column(db.Text, default='{}')
+    study_subjects = db.Column(db.Text, default='[]')
+    theme = db.Column(db.String(50), default='academic')
+    revision_settings = db.Column(db.Text, default='{}')
+    notes_data = db.Column(db.Text, default='{}')
+    study_time_data = db.Column(db.Text, default='{}')
+    color_library = db.Column(db.Text, default='[]')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
 
 DAY_ORDER = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
@@ -705,7 +715,6 @@ DAY_ALIASES = {
     'sun': 'Sunday', 'sunday': 'Sunday'
 }
 
-
 def normalize_day_name(day_raw: str) -> str | None:
     if not day_raw:
         return None
@@ -713,7 +722,6 @@ def normalize_day_name(day_raw: str) -> str | None:
     if not cleaned:
         return None
     return DAY_ALIASES.get(cleaned, day_raw.strip().title())
-
 
 def normalize_time_string(time_raw: str) -> str | None:
     if not time_raw:
@@ -750,22 +758,18 @@ def normalize_time_string(time_raw: str) -> str | None:
 
     return None
 
-
 def time_to_minutes(time_str: str) -> int:
     hour, minute = map(int, time_str.split(':'))
     return hour * 60 + minute
 
-
 def build_row_label(start_time: str, end_time: str) -> str:
     return f"{start_time} - {end_time}"
-
 
 def _safe_strip(value: object | None) -> str | None:
     if isinstance(value, str):
         stripped = value.strip()
         return stripped or None
     return None
-
 
 def normalize_date_string(date_raw: object | None) -> str | None:
     if date_raw is None:
@@ -790,31 +794,29 @@ def normalize_date_string(date_raw: object | None) -> str | None:
 
     return None
 
-
 def gemini_prompt_template() -> str:
     return (
         "You are an assistant that extracts timetable information from an image. "
-        "Respond strictly in JSON using the following schema: {\n"
-        "  \"timetable_name\": string (optional),\n"
-        "  \"lessons\": [\n"
-        "    {\n"
-        "      \"day\": string (e.g. Monday),\n"
-        "      \"subject\": string,\n"
-        "      \"start_time\": string in 24h format (HH:MM),\n"
-        "      \"end_time\": string in 24h format (HH:MM),\n"
-        "      \"location\": string (optional),\n"
-        "      \"notes\": string (optional),\n"
-        "      \"start_date\": string in ISO format YYYY-MM-DD (optional),\n"
-        "      \"end_date\": string in ISO format YYYY-MM-DD (optional)\n"
-        "    }\n"
-        "  ]\n"
-        "}.\n"
+        "Respond strictly in JSON using the following schema: {\\n"
+        "  \"timetable_name\": string (optional),\\n"
+        "  \"lessons\": [\\n"
+        "    {\\n"
+        "      \"day\": string (e.g. Monday),\\n"
+        "      \"subject\": string,\\n"
+        "      \"start_time\": string in 24h format (HH:MM),\\n"
+        "      \"end_time\": string in 24h format (HH:MM),\\n"
+        "      \"location\": string (optional),\\n"
+        "      \"notes\": string (optional),\\n"
+        "      \"start_date\": string in ISO format YYYY-MM-DD (optional),\\n"
+        "      \"end_date\": string in ISO format YYYY-MM-DD (optional)\\n"
+        "    }\\n"
+        "  ]\\n"
+        "}.\\n"
         "Always ensure start_time and end_time are in 24h format. "
         "If any value is unknown or unreadable, set that JSON field to null rather than omitting it. "
         "Do not include any additional commentary."
         "If there is a From and To column with dates, ignore them and don't append them to anything, also the same with the room / staff columns, also ignore codes in the subject names."
     )
-
 
 def gemini_retry_prompt_template() -> str:
     return (
@@ -823,7 +825,6 @@ def gemini_retry_prompt_template() -> str:
         "Return the exact same JSON schema as before. If a value is unclear, set it to null rather than skipping the row. "
         "Do not add commentary or Markdown fences—output pure JSON only."
     )
-
 
 DEFAULT_COLOR_SCHEME = {
     'primary': '#2563eb',
@@ -836,7 +837,6 @@ DEFAULT_COLOR_SCHEME = {
     'header': '#f3f4f6'
 }
 
-
 def _persist_gemini_log(entry: dict) -> str:
     """Persist Gemini interaction details for debugging and return a log identifier."""
     try:
@@ -848,7 +848,6 @@ def _persist_gemini_log(entry: dict) -> str:
     except Exception as exc:  # noqa: BLE001
         app.logger.exception('Failed to persist Gemini log: %s', exc)
         return ''
-
 
 def extract_json_from_text(raw_text: str) -> tuple[dict | list | None, str | None]:
     """Attempt to parse JSON from Gemini output, returning (payload, error_message)."""
@@ -882,7 +881,6 @@ def extract_json_from_text(raw_text: str) -> tuple[dict | list | None, str | Non
         except json.JSONDecodeError as final_err:
             return None, f"Failed to parse JSON: {final_err.msg}"
 
-
 def _close_json_braces(payload: str) -> str:
     """Best-effort attempt to append missing closing braces/brackets."""
     stack: list[str] = []
@@ -915,6 +913,7 @@ def _close_json_braces(payload: str) -> str:
 
     closing = ''.join('}' if ch == '{' else ']' for ch in reversed(stack))
     return ''.join(result_chars) + closing
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -950,40 +949,73 @@ def google_auth():
             )
             db.session.add(user)
             db.session.commit()
-
-            '''
-            # Create default timetable
-            default_timetable = Timetable(
-                user_id=user.id,
-                name='My Timetable',
-                row_headers=json.dumps(['9:00 - 10:00', '10:15 - 11:15', '11:30 - 12:30', '13:30 - 14:30', '14:45 - 15:45']),
-                column_headers=json.dumps(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']),
-                cells_data=json.dumps({}),
-                color_scheme=json.dumps({
-                    'primary': '#3b82f6',
-                    'secondary': '#64748b',
-                    'success': '#10b981',
-                    'warning': '#f59e0b',
-                    'danger': '#ef4444'
-                }),
-                time_slot_mode=True,
-                time_slot_settings=json.dumps({
-                    'start_time': '9:00',
-                    'slot_duration': 60,
-                    'break_duration': 15,
-                    'lunch_break': {'start': '12:30', 'duration': 60},
-                    'time_format': '24h'
-                })
-            )
-            db.session.add(default_timetable)
-            db.session.commit()
-        '''
             
         login_user(user)
         return jsonify({'success': True})
         
     except ValueError:
         return jsonify({'success': False, 'error': 'Invalid token'}), 400
+
+@app.route('/auth/microsoft/login')
+def microsoft_login():
+    client = msal.ConfidentialClientApplication(
+        MICROSOFT_CLIENT_ID, authority=MICROSOFT_AUTHORITY,
+        client_credential=MICROSOFT_CLIENT_SECRET,
+    )
+    auth_url = client.get_authorization_request_url(
+        MICROSOFT_SCOPE, redirect_uri=url_for('microsoft_callback', _external=True)
+    )
+    return redirect(auth_url)
+
+@app.route('/auth/microsoft/callback')
+def microsoft_callback():
+    if request.args.get('error'):
+        return f"Error: {request.args.get('error_description')}"
+        
+    code = request.args.get('code')
+    client = msal.ConfidentialClientApplication(
+        MICROSOFT_CLIENT_ID, authority=MICROSOFT_AUTHORITY,
+        client_credential=MICROSOFT_CLIENT_SECRET,
+    )
+    result = client.acquire_token_by_authorization_code(
+        code, scopes=MICROSOFT_SCOPE,
+        redirect_uri=url_for('microsoft_callback', _external=True)
+    )
+    
+    if "error" in result:
+        return f"Error: {result.get('error_description')}"
+        
+    # Get user info from token
+    claims = result.get("id_token_claims")
+    microsoft_id = claims.get("oid")
+    email = claims.get("preferred_username") or claims.get("email")
+    name = claims.get("name")
+    
+    # Check if user exists
+    user = User.query.filter_by(microsoft_id=microsoft_id).first()
+    
+    if not user:
+        # Check if user exists by email (link accounts)
+        if email:
+            user = User.query.filter_by(email=email).first()
+            if user:
+                user.microsoft_id = microsoft_id
+                db.session.commit()
+        
+        if not user:
+            # Create new user
+            user = User(
+                google_id=f"microsoft_{microsoft_id}", # Placeholder
+                microsoft_id=microsoft_id,
+                email=email,
+                name=name,
+                profile_pic=""
+            )
+            db.session.add(user)
+            db.session.commit()
+            
+    login_user(user)
+    return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
 @login_required

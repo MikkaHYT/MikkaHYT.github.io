@@ -1,0 +1,289 @@
+{
+  "timestamp": "2025-11-21T16:27:41.879512Z",
+  "user_id": 1,
+  "filename": "Alton-A-Level-Timetable-2023-scaled.jpg",
+  "mime_type": "image/jpeg",
+  "model": "gemini-flash-latest",
+  "generation_config": {
+    "temperature": 0.2,
+    "top_p": 0.8,
+    "max_output_tokens": 5048
+  },
+  "image_bytes_length": 202867,
+  "attempts": [
+    {
+      "attempt": 1,
+      "label": "primary",
+      "candidate_text_count": 1,
+      "safety_blocked": false,
+      "prompt_blocked": false
+    }
+  ],
+  "candidate_texts": [
+    "```json\n{\n  \"timetable_name\": \"ALTON EXAMPLE A LEVEL TIMETABLE\",\n  \"lessons\": [\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Chemistry\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Mathematics\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Biology\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Tutor\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Chemistry\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Mathematics\",\n      \"start_time\": \"12:15\",\n      \"end_time\": \"13:45\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Biology\",\n      \"start_time\": \"13:50\",\n      \"end_time\": \"15:20\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Enrichment\",\n      \"start_time\": \"15:20\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Chemistry\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Mathematics\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Biology\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    }\n  ]\n}\n```"
+  ],
+  "response_has_candidates": true,
+  "safety_blocked": false,
+  "attempt_count": 1,
+  "status": "success",
+  "payload_text": "```json\n{\n  \"timetable_name\": \"ALTON EXAMPLE A LEVEL TIMETABLE\",\n  \"lessons\": [\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Chemistry\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Monday\",\n      \"subject\": \"Mathematics\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Biology\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Tutor\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Tuesday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Chemistry\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Mathematics\",\n      \"start_time\": \"12:15\",\n      \"end_time\": \"13:45\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Biology\",\n      \"start_time\": \"13:50\",\n      \"end_time\": \"15:20\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Wednesday\",\n      \"subject\": \"Enrichment\",\n      \"start_time\": \"15:20\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Thursday\",\n      \"subject\": \"Chemistry\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Mathematics\",\n      \"start_time\": \"10:00\",\n      \"end_time\": \"11:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"11:30\",\n      \"end_time\": \"12:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Biology\",\n      \"start_time\": \"13:00\",\n      \"end_time\": \"14:30\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    },\n    {\n      \"day\": \"Friday\",\n      \"subject\": \"Independent Study\",\n      \"start_time\": \"14:45\",\n      \"end_time\": \"16:15\",\n      \"location\": null,\n      \"notes\": null,\n      \"start_date\": null,\n      \"end_date\": null\n    }\n  ]\n}\n```",
+  "parsed_lessons": [
+    {
+      "day": "Monday",
+      "start_time": "10:00",
+      "end_time": "11:30",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Monday",
+      "start_time": "11:30",
+      "end_time": "12:30",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 60
+    },
+    {
+      "day": "Monday",
+      "start_time": "13:00",
+      "end_time": "14:30",
+      "subject": "Chemistry",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Monday",
+      "start_time": "14:45",
+      "end_time": "16:15",
+      "subject": "Mathematics",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Tuesday",
+      "start_time": "10:00",
+      "end_time": "11:30",
+      "subject": "Biology",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Tuesday",
+      "start_time": "11:30",
+      "end_time": "12:30",
+      "subject": "Tutor",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 60
+    },
+    {
+      "day": "Tuesday",
+      "start_time": "13:00",
+      "end_time": "14:30",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Tuesday",
+      "start_time": "14:45",
+      "end_time": "16:15",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Wednesday",
+      "start_time": "10:00",
+      "end_time": "11:30",
+      "subject": "Chemistry",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Wednesday",
+      "start_time": "12:15",
+      "end_time": "13:45",
+      "subject": "Mathematics",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Wednesday",
+      "start_time": "13:50",
+      "end_time": "15:20",
+      "subject": "Biology",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Wednesday",
+      "start_time": "15:20",
+      "end_time": "16:15",
+      "subject": "Enrichment",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 55
+    },
+    {
+      "day": "Thursday",
+      "start_time": "10:00",
+      "end_time": "11:30",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Thursday",
+      "start_time": "11:30",
+      "end_time": "12:30",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 60
+    },
+    {
+      "day": "Thursday",
+      "start_time": "13:00",
+      "end_time": "14:30",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Thursday",
+      "start_time": "14:45",
+      "end_time": "16:15",
+      "subject": "Chemistry",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Friday",
+      "start_time": "10:00",
+      "end_time": "11:30",
+      "subject": "Mathematics",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Friday",
+      "start_time": "11:30",
+      "end_time": "12:30",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 60
+    },
+    {
+      "day": "Friday",
+      "start_time": "13:00",
+      "end_time": "14:30",
+      "subject": "Biology",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    },
+    {
+      "day": "Friday",
+      "start_time": "14:45",
+      "end_time": "16:15",
+      "subject": "Independent Study",
+      "location": null,
+      "notes": null,
+      "staff": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": 90
+    }
+  ],
+  "timetable_id": 15,
+  "ordered_days": [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday"
+  ],
+  "row_headers": [
+    "10:00 - 11:30",
+    "11:30 - 12:30",
+    "12:15 - 13:45",
+    "13:00 - 14:30",
+    "13:50 - 15:20",
+    "14:45 - 16:15",
+    "15:20 - 16:15"
+  ]
+}
