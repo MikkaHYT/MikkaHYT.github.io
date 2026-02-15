@@ -516,26 +516,262 @@ footer {
   
   /* Responsive styles */
   @media (max-width: 768px) {
+    /* General */
+    .container {
+      padding: 0 15px;
+    }
+    
+    section {
+      padding: 50px 0;
+    }
+    
+    /* Navbar */
+    .navbar {
+      flex-direction: column;
+      padding: 12px 15px;
+      gap: 15px;
+    }
+    
+    .brand {
+      margin-bottom: 0;
+    }
+    
+    .logo-image {
+      width: 35px;
+      height: 35px;
+    }
+    
+    .logo-text {
+      font-size: 20px;
+    }
+    
     .nav-links {
-      display: none;
+      width: 100%;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      display: flex !important;
+    }
+    
+    .nav-links li {
+      flex: 0 1 auto;
+    }
+    
+    .nav-links a {
+      font-size: 14px;
+      padding: 8px 12px;
+    }
+    
+    /* Hero section */
+    .hero-section {
+      padding: 60px 0;
+    }
+    
+    .title {
+      font-size: 32px;
+      line-height: 1.3;
+    }
+    
+    .subtitle {
+      font-size: 18px;
+    }
+    
+    .description {
+      font-size: 16px;
+      line-height: 1.5;
     }
     
     .cta-buttons {
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
+      align-items: stretch;
     }
     
+    .btn-primary, .btn-secondary {
+      width: 100%;
+      text-align: center;
+      padding: 12px 16px;
+      font-size: 16px;
+    }
+    
+    /* Sections */
     .section-title {
-      font-size: 28px;
+      font-size: 24px;
+      margin-bottom: 15px;
+    }
+    
+    .section-title::after {
+      width: 40px;
+      bottom: -8px;
+    }
+    
+    .section-description {
+      font-size: 16px;
+      margin-bottom: 25px;
+    }
+    
+    /* Skills grid */
+    .skills-grid {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 20px;
+      margin-top: 25px;
+    }
+    
+    .skill-card {
+      padding: 20px 15px;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    
+    .skill-card i {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    
+    .skill-card h3 {
+      font-size: 14px;
+    }
+    
+    /* Project cards */
+    .project-cards {
+      grid-template-columns: 1fr;
+      gap: 20px;
+      margin-top: 25px;
+    }
+    
+    .project-card {
+      padding: 20px;
+    }
+    
+    .project-content {
+      padding: 0;
+    }
+    
+    .project-content h3 {
+      font-size: 18px;
+    }
+    
+    .project-content p {
+      font-size: 14px;
+    }
+    
+    /* Games grid */
+    .games-grid {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+      margin-top: 25px;
+    }
+    
+    .game-card {
+      padding: 20px;
+    }
+    
+    .game-icon {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 15px;
+    }
+    
+    .game-icon i {
+      font-size: 26px;
+    }
+    
+    .game-card h3 {
+      font-size: 16px;
+    }
+    
+    .game-card p {
+      font-size: 13px;
+      min-height: auto;
+    }
+    
+    /* Footer */
+    footer .container {
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+    }
+    
+    footer {
+      padding: 25px 15px;
+    }
+    
+    /* Buttons */
+    .btn-play {
+      padding: 10px 16px;
+      font-size: 14px;
+    }
+  }
+  
+  /* Extra small screens (phones in portrait) */
+  @media (max-width: 480px) {
+    .container {
+      padding: 0 12px;
+    }
+    
+    section {
+      padding: 40px 0;
     }
     
     .title {
-      font-size: 36px;
+      font-size: 26px;
     }
     
-    footer .container {
-      flex-direction: column;
-      gap: 15px;
+    .subtitle {
+      font-size: 16px;
+    }
+    
+    .section-title {
+      font-size: 20px;
+    }
+    
+    .skills-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .games-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .nav-links a {
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+  }
+  
+  /* Landscape mode adjustments */
+  @media (max-width: 768px) and (orientation: landscape) {
+    section {
+      padding: 30px 0;
+    }
+    
+    .hero-section {
+      padding: 40px 0;
+    }
+    
+    .title {
+      font-size: 28px;
+    }
+    
+    .subtitle {
+      font-size: 16px;
+    }
+  }
+  
+  /* Tablet adjustments */
+  @media (min-width: 768px) and (max-width: 1024px) {
+    .skills-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .project-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .games-grid {
+      grid-template-columns: repeat(2, 1fr);
     }
   }
 
@@ -590,9 +826,56 @@ footer {
     background: linear-gradient(160deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.88));
 }
 
-[data-theme='dark'] .skill-card,
-[data-theme='dark'] .project-card {
-    background: rgba(30, 41, 59, 0.85);
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.6);
+/* Additional mobile optimizations */
+@media (max-width: 768px) {
+  /* Touch-friendly button sizes */
+  a, button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  
+  /* Prevent zoom on input focus */
+  input, select, textarea {
+    font-size: 16px;
+  }
+  
+  /* Improve readability */
+  body {
+    font-size: 16px;
+  }
+  
+  /* Better spacing for touch */
+  .nav-links a {
+    padding: 12px 8px;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Cards with better padding */
+  .skill-card,
+  .project-card,
+  .game-card {
+    padding: 25px 15px;
+  }
+}
+
+/* Dark mode improvements */
+[data-theme='dark'] .hero-section {
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+    color: #e2e8f0;
+}
+
+[data-theme='dark'] .title,
+[data-theme='dark'] .subtitle,
+[data-theme='dark'] .section-title {
+    color: #e2e8f0;
+}
+
+[data-theme='dark'] .description,
+[data-theme='dark'] .section-description {
+    color: #cbd5e1;
 }
