@@ -2,3 +2,6 @@ chat.db
 instance/timetable.db
 instance/timetable.local.bak
 .env
+instance/gemini_logs/
+instance/gemini_logs/20251121T162452_9c5227e6.json
+instance/gemini_logs/20251121T162801_a2913359.json
