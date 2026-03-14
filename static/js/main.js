@@ -1,5 +1,6 @@
 
 
+
 // Dark Mode Toggle //
 document.addEventListener('DOMContentLoaded', function() {
     const toggleSwitch = document.getElementById('darkModeToggle');
@@ -34,4 +35,53 @@ document.addEventListener('DOMContentLoaded', function() {
     if (toggleSwitch) {
         toggleSwitch.addEventListener('click', toggleDarkMode);
     }
+});
+
+// Contact Form Handler //
+document.addEventListener('DOMContentLoaded', function() {
+    const contactForm = document.getElementById('contactForm');
+    if (!contactForm) return;
+    
+    contactForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('name').value;
+        const email = document.getElementById('email').value;
+        const message = document.getElementById('message').value;
+        const submitBtn = contactForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            
+            const response = await fetch('/api/contact', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, email, message })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                submitBtn.textContent = '✓ Message Sent!';
+                contactForm.reset();
+                setTimeout(() => {
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                }, 3000);
+            } else {
+                alert(data.error || 'Failed to send message');
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('Contact form error:', error);
+            alert('Error sending message. Please try again.');
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    });
 });

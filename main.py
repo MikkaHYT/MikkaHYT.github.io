@@ -1,7 +1,10 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, send_file
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import os
 import sqlite3
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from google.oauth2 import id_token
@@ -38,9 +41,118 @@ def index():
 def games():
     return render_template('games.html')
 
+@app.route('/api/contact', methods=['POST'])
+def contact_submit():
+    """Handle portfolio contact form submissions"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        message = data.get('message', '').strip()
+        
+        if not all([name, email, message]):
+            return jsonify({'error': 'All fields required'}), 400
+        
+        # Try to send email
+        try:
+            send_contact_email(name, email, message)
+        except Exception as e:
+            print(f"Email send error: {e}")
+            # Still save even if email fails
+        
+        # Save to file as backup
+        contact_entry = {
+            'name': name,
+            'email': email,
+            'message': message,
+            'timestamp': datetime.now().isoformat(),
+            'ip': request.remote_addr
+        }
+        
+        import json
+        with open('contacts.json', 'a') as f:
+            f.write(json.dumps(contact_entry) + '\n')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Thanks for reaching out! I\'ll get back to you soon.'
+        }), 200
+    except Exception as e:
+        print(f"Contact form error: {e}")
+        return jsonify({'error': 'Failed to submit'}), 500
+
+def send_contact_email(name, sender_email, message):
+    """Send contact form submission via Gmail SMTP"""
+    gmail_user = os.getenv('GMAIL_USER')
+    gmail_password = os.getenv('GMAIL_PASSWORD').replace(' ', '')  # Remove spaces
+    recipient = os.getenv('GMAIL_RECIPIENT')
+    
+    if not all([gmail_user, gmail_password, recipient]):
+        print("Gmail credentials not configured")
+        return
+    
+    # Create email
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f"New Portfolio Contact: {name}"
+    msg['From'] = gmail_user
+    msg['To'] = recipient
+    
+    # Email body
+    text = f"""
+Portfolio Contact Form Submission
+
+Name: {name}
+Email: {sender_email}
+
+Message:
+{message}
+
+---
+Sent from mikkahyt.github.io
+    """
+    
+    html = f"""
+    <html>
+      <body>
+        <h2>New Portfolio Contact</h2>
+        <p><strong>Name:</strong> {name}</p>
+        <p><strong>Email:</strong> {sender_email}</p>
+        <p><strong>Message:</strong></p>
+        <p>{message.replace(chr(10), '<br>')}</p>
+        <hr>
+        <p><em>Sent from mikkahyt.github.io</em></p>
+      </body>
+    </html>
+    """
+    
+    msg.attach(MIMEText(text, 'plain'))
+    msg.attach(MIMEText(html, 'html'))
+    
+    # Send via Gmail SMTP
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        server.login(gmail_user, gmail_password)
+        server.sendmail(gmail_user, recipient, msg.as_string())
+    
+    print(f"Email sent to {recipient} from {sender_email}")
+
+@app.route('/<path:filename>')
+def serve_root_file(filename):
+    """Serve files from root directory (script.js, dat.gui.min.js, etc)"""
+    if filename in ['script.js', 'dat.gui.min.js', 'logo.png', 'app_badge.png', 'gp_badge.png']:
+        return send_file(filename)
+    return "File not found", 404
+
 @app.route('/eaglercraft')
 def eaglercraft():
-    return render_template('eaglercraftx.html')
+    return render_template('EaglercraftX.html')
+
+@app.route('/fluid')
+def fluid():
+    return send_file('fluid.html')
+
+@app.route('/uno')
+def uno():
+    return send_file('uno.html')
 
 @app.route('/imagegen')
 def imagegen():
@@ -3189,4 +3301,4 @@ def read_custom_words():
         return []
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, host='0.0.0.0', port=8080, allow_unsafe_werkzeug=True)

@@ -3,6 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Mikka - Full-stack developer specializing in Python, JavaScript, and web applications. Check out my projects and get in touch.">
+    <meta name="keywords" content="developer, portfolio, python, javascript, flask, web development">
+    <meta name="author" content="Mikka">
+    <meta property="og:title" content="Mikka | Full-Stack Developer">
+    <meta property="og:description" content="Explore my projects and connect with me on GitHub or email.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://mikkahyt.github.io">
+    <meta property="og:image" content="https://mikkahyt.github.io/static/img/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Mikka | Developer Portfolio">
+    <meta name="twitter:description" content="Full-stack developer | Python | JavaScript | Flask">
     <title>Mikka | Developer Portfolio</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="static/css/main.css">
@@ -23,6 +34,7 @@
                 <li><a href="/#about" class="active">About</a></li>
                 <li><a href="/#skills">Skills</a></li>
                 <li><a href="/#projects">Projects</a></li>
+                <li><a href="/#contact">Contact</a></li>
                 <li><a href="/games" class="btn-primary">Games</a></li>
                 <li>
                     <span id="darkModeToggle" class="darkModeToggle" aria-label="Toggle dark mode">
@@ -36,53 +48,66 @@
     <main>
         <section id="about" class="hero-section">
             <div class="container">
-                <h1 class="title">Hi, I'm <span class="highlight">Mikka</span></h1>
-                <h2 class="subtitle">Software Developer</h2>
-                <p class="description">I create innovative solutions through code, specializing in web applications and interactive experiences.</p>
-                <div class="cta-buttons">
+                <h1 class="title fade-in">Hi, I'm <span class="highlight">Mikka</span></h1>
+                <h2 class="subtitle fade-in-delay">Full-Stack Developer</h2>
+                <p class="description fade-in-delay-2">I build web applications and interactive experiences using Python, JavaScript, and modern web technologies. Currently looking for opportunities to create impactful solutions.</p>
+                <div class="cta-buttons fade-in-delay-3">
                     <a href="/#projects" class="btn-primary">View Projects</a>
-                    <a href="/chat" class="btn-secondary">Try Chat Server</a>
+                    <a href="/#contact" class="btn-secondary">Get in Touch</a>
                 </div>
             </div>
         </section>
 
         <section id="skills" class="skills-section">
             <div class="container">
-                <h2 class="section-title">Technical Skills</h2>
+                <h2 class="section-title slide-in-left">Technical Skills</h2>
                 <div class="skills-grid">
-                    <div class="skill-card">
+                    <div class="skill-card stagger-1">
                         <i class="fab fa-python"></i>
                         <h3>Python</h3>
+                        <p class="skill-desc">Flask, FastAPI, web scraping</p>
                         <div class="skill-level">
                             <div class="progress-bar" style="width: 100%"></div>
                         </div>
                     </div>
-                    <div class="skill-card">
+                    <div class="skill-card stagger-2">
                         <i class="fab fa-js"></i>
                         <h3>JavaScript</h3>
+                        <p class="skill-desc">React, SocketIO, DOM manipulation</p>
                         <div class="skill-level">
                             <div class="progress-bar" style="width: 90%"></div>
                         </div>
                     </div>
-                    <div class="skill-card">
+                    <div class="skill-card stagger-3">
                         <i class="fab fa-html5"></i>
-                        <h3>HTML</h3>
+                        <h3>HTML5</h3>
+                        <p class="skill-desc">Semantic HTML, accessibility</p>
                         <div class="skill-level">
                             <div class="progress-bar" style="width: 90%"></div>
                         </div>
                     </div>
-                    <div class="skill-card">
+                    <div class="skill-card stagger-4">
                         <i class="fab fa-css3-alt"></i>
-                        <h3>CSS</h3>
+                        <h3>CSS3</h3>
+                        <p class="skill-desc">Responsive design, animations</p>
                         <div class="skill-level">
-                            <div class="progress-bar" style="width: 80%"></div>
+                            <div class="progress-bar" style="width: 85%"></div>
                         </div>
                     </div>
-                    <div class="skill-card">
+                    <div class="skill-card stagger-5">
                         <i class="fab fa-microsoft"></i>
                         <h3>C#</h3>
+                        <p class="skill-desc">Desktop applications, game dev</p>
                         <div class="skill-level">
                             <div class="progress-bar" style="width: 75%"></div>
+                        </div>
+                    </div>
+                    <div class="skill-card stagger-6">
+                        <i class="fas fa-database"></i>
+                        <h3>Databases</h3>
+                        <p class="skill-desc">SQLite, SQL optimization</p>
+                        <div class="skill-level">
+                            <div class="progress-bar" style="width: 85%"></div>
                         </div>
                     </div>
                 </div>
@@ -91,36 +116,95 @@
 
         <section id="projects" class="projects-section">
             <div class="container">
-                <h2 class="section-title">Featured Projects</h2>
+                <h2 class="section-title slide-in-right">Featured Projects</h2>
                 <div class="project-cards">
-                    <div class="project-card">
+                    <div class="project-card bounce-in">
                         <div class="project-content">
-                            <h3>Game Collection</h3>
-                            <p>A curated collection of web-based games and interactive experiences.</p>
-                            <a href="/games" class="btn-secondary">Explore Games</a>
+                            <h3>Chat Server</h3>
+                            <p class="tech-stack"><strong>Tech:</strong> Flask, SQLite, SocketIO, JavaScript</p>
+                            <p>Real-time messaging platform with user authentication, room management, and persistent storage. Built to demonstrate full-stack capabilities with WebSocket communication.</p>
+                            <div class="project-links">
+                                <a href="/chat" class="btn-secondary">Try Live</a>
+                                <a href="https://github.com/MikkaHYT/chat-serv" class="btn-secondary-outline" target="_blank">GitHub</a>
+                            </div>
                         </div>
                     </div>
-                    <div class="project-card">
+                    <div class="project-card bounce-in">
                         <div class="project-content">
-                            <h3>Public Chat Server</h3>
-                            <p>Real-time messaging platform built with Flask, SQLite and SocketIO.</p>
-                            <a href="/chat" class="btn-secondary">Join Chat</a>
+                            <h3>Timetable Manager</h3>
+                            <p class="tech-stack"><strong>Tech:</strong> Flask, SQLite, Google OAuth, Gemini API</p>
+                            <p>Custom scheduling application with Google authentication and AI-powered features. Designed for personal productivity and time management with a clean, intuitive interface.</p>
+                            <div class="project-links">
+                                <a href="/dashboard" class="btn-secondary">Open App</a>
+                                <a href="https://github.com/MikkaHYT/timetable" class="btn-secondary-outline" target="_blank">GitHub</a>
+                            </div>
                         </div>
                     </div>
-                    <div class="project-card">
-                        <div class="project-content">
-                            <h3>Timetable App</h3>
-                            <p>A web app for creating and customising timetables that I made for my girlfriend. Uses Flask, SQLite, Google OAuth and Gemini API.</p>
-                            <a href="/dashboard" class="btn-secondary">Open App</a>
-                        </div>
-                    </div>
-                    <div class="project-card">
+                    <div class="project-card bounce-in">
                         <div class="project-content">
                             <h3>Flooring Shop Website</h3>
-                            <p>A web app for managing flooring shop inventory and messages. I made this for my college placement before they closed down in order for them to manage items as their previous website didnt have stock or anything live, just a static html page, so I took their ideas and implemented a dynamic solution for them. It uses Flask and SQLite.</p>
-                            <a href="https://floorofhearts.814850.xyz" class="btn-secondary">Open App</a>
+                            <p class="tech-stack"><strong>Tech:</strong> Flask, SQLite, HTML, CSS</p>
+                            <p>Dynamic inventory management system replacing a static website. Features real-time stock updates, customer messaging, and admin dashboard for a local flooring business.</p>
+                            <div class="project-links">
+                                <a href="https://floorofhearts.814850.xyz" class="btn-secondary">Visit Site</a>
+                                <a href="https://github.com/MikkaHYT/floorofhearts-flask" class="btn-secondary-outline" target="_blank">GitHub</a>
+                            </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="contact-section">
+            <div class="container">
+                <div class="response-badge">
+                    <span class="badge-dot"></span>
+                    <span class="badge-text">Responds within 24 hours</span>
+                </div>
+                <h2 class="section-title slide-in-left">Let's Work Together</h2>
+                <p class="section-description">I'm actively looking for opportunities to build amazing things. Let's connect!</p>
+                
+                <div class="contact-content">
+                    <div class="contact-info fade-in">
+                        <h3>Get In Touch</h3>
+                        <div class="contact-item">
+                            <i class="fas fa-envelope"></i>
+                            <div>
+                                <p class="label">Email</p>
+                                <a href="mailto:mikka@814850.xyz" class="contact-link">mikka@814850.xyz</a>
+                            </div>
+                        </div>
+                        <div class="contact-item">
+                            <i class="fab fa-github"></i>
+                            <div>
+                                <p class="label">GitHub</p>
+                                <a href="https://github.com/MikkaHYT" class="contact-link" target="_blank">github.com/MikkaHYT</a>
+                            </div>
+                        </div>
+                        <div class="contact-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <div>
+                                <p class="label">Location</p>
+                                <p class="contact-text">Swindon, UK</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form class="contact-form fade-in-delay" id="contactForm">
+                        <div class="form-group">
+                            <label for="name">Name</label>
+                            <input type="text" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="message">Message</label>
+                            <textarea id="message" name="message" rows="5" required></textarea>
+                        </div>
+                        <button type="submit" class="btn-primary">Send Message</button>
+                    </form>
                 </div>
             </div>
         </section>
@@ -128,7 +212,11 @@
 
     <footer>
         <div class="container">
-            <p>&copy; 2026 Mikka. All rights reserved.</p>
+            <p>&copy; 2025 Mikka. All rights reserved.</p>
+            <div class="footer-links">
+                <a href="https://github.com/MikkaHYT" target="_blank" aria-label="GitHub"><i class="fab fa-github"></i></a>
+                <a href="mailto:mikka@814850.xyz" aria-label="Email"><i class="fas fa-envelope"></i></a>
+            </div>
         </div>
     </footer>
 </body>
